@@ -137,7 +137,10 @@ func TestPagesEarlyBreak(t *testing.T) {
 		calls++
 		return []int{1, 2}, PageInfo{true, "c" + after}, nil
 	}
-	for range Pages(context.Background(), fetch) {
+	for _, err := range Pages(context.Background(), fetch) {
+		if err != nil {
+			t.Fatal(err)
+		}
 		break
 	}
 	if calls != 1 {
