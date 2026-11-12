@@ -1,0 +1,954 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v3/access_codes",
+    "query": {
+      "filter[tenant]": "7754340",
+      "include": "devices,virtual_keys,virtual_keys.door_releases,virtual_keys.door_releases.panel",
+      "page[size]": "20",
+      "filter[status]": "active",
+      "page[number]": "1"
+    },
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "if-none-match": "W/\"fec63a32752b727b5fb9873fb4f94312\""
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/vnd.api+json; charset=utf-8",
+      "etag": "W/\"5d18828bf1c46ddf38f68642a1ea96ba\""
+    },
+    "body": {
+      "data": [
+        {
+          "id": "15387693",
+          "type": "keychains",
+          "attributes": {
+            "name": "Guest One",
+            "weekdays": [],
+            "starts_at": "2026-11-01T23:15:00Z",
+            "ends_at": "2027-11-01T06:59:00Z",
+            "time_from": "15:15",
+            "time_to": "23:59",
+            "kind": "custom",
+            "start_date": "2026-11-01",
+            "end_date": "2027-10-31",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "99130956",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "95370988",
+          "type": "keychains",
+          "attributes": {
+            "name": "Guest Two",
+            "weekdays": [],
+            "starts_at": "2026-10-19T23:00:00Z",
+            "ends_at": "2027-10-19T06:59:00Z",
+            "time_from": "16:00",
+            "time_to": "23:59",
+            "kind": "custom",
+            "start_date": "2026-10-19",
+            "end_date": "2027-10-18",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "38659984",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "95138079",
+          "type": "keychains",
+          "attributes": {
+            "name": "Guest Three",
+            "weekdays": [],
+            "starts_at": "2026-10-16T07:10:00Z",
+            "ends_at": "2027-10-16T06:59:00Z",
+            "time_from": "00:10",
+            "time_to": "23:59",
+            "kind": "custom",
+            "start_date": "2026-10-16",
+            "end_date": "2027-10-15",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "38703205",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "68513236",
+          "type": "keychains",
+          "attributes": {
+            "name": "Guest Pass One",
+            "weekdays": [],
+            "starts_at": "2026-08-12T21:00:00Z",
+            "ends_at": "2027-08-12T06:59:00Z",
+            "time_from": "14:00",
+            "time_to": "23:59",
+            "kind": "custom",
+            "start_date": "2026-08-12",
+            "end_date": "2027-08-11",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "35327219",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "48184743",
+          "type": "keychains",
+          "attributes": {
+            "name": "Guest Five",
+            "weekdays": [],
+            "starts_at": "2026-03-22T01:45:00Z",
+            "ends_at": "2027-03-22T01:45:00Z",
+            "time_from": "18:45",
+            "time_to": "18:45",
+            "kind": "custom",
+            "start_date": "2026-03-21",
+            "end_date": "2027-03-21",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "85404824",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "35154212",
+          "type": "keychains",
+          "attributes": {
+            "name": "Test Recurring",
+            "weekdays": [
+              "mon",
+              "wed",
+              "fri"
+            ],
+            "starts_at": "2026-11-11T17:00:00Z",
+            "ends_at": "2026-12-01T01:00:00Z",
+            "time_from": "09:00",
+            "time_to": "17:00",
+            "kind": "recurring",
+            "start_date": "2026-11-11",
+            "end_date": "2026-11-30",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "57620235",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "13673",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "18461",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "88220723",
+          "type": "keychains",
+          "attributes": {
+            "name": "Delivery Pass",
+            "weekdays": [],
+            "starts_at": "2026-10-28T02:45:08Z",
+            "ends_at": "2026-11-27T02:45:08Z",
+            "time_from": "19:45",
+            "time_to": "18:45",
+            "kind": "delivery_pass",
+            "start_date": "2026-10-27",
+            "end_date": "2026-11-26",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "69527006",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "13673",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "50410",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "18461",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "85303961",
+          "type": "keychains",
+          "attributes": {
+            "name": "Test",
+            "weekdays": [],
+            "starts_at": "2026-11-12T05:00:00Z",
+            "ends_at": "2026-11-12T06:00:00Z",
+            "time_from": "21:00",
+            "time_to": "22:00",
+            "kind": "custom",
+            "start_date": "2026-11-11",
+            "end_date": "2026-11-11",
+            "allow_unit_access": false
+          },
+          "relationships": {
+            "virtual_keys": {
+              "data": [
+                {
+                  "id": "44122212",
+                  "type": "virtual_keys"
+                },
+                {
+                  "id": "12915969",
+                  "type": "virtual_keys"
+                }
+              ]
+            },
+            "devices": {
+              "data": [
+                {
+                  "id": "13673",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "50410",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "18461",
+                  "type": "cloud_keyz_controllers"
+                },
+                {
+                  "id": "38211",
+                  "type": "panels"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "included": [
+        {
+          "id": "99130956",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Guest One",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/099/130/956/original/qr_code_20261101-1-245i75.png",
+            "email": null,
+            "sms_number": "+15555550101",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "246801",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/99130956/6c1f91c9954b29c16b7f558bf9328098",
+            "sent_at": "2026-11-01T23:15:00Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "38211",
+          "type": "panels",
+          "attributes": {
+            "name": "Main Entrance",
+            "nfc": {
+              "uuid": ""
+            }
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "38659984",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Guest Two",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/038/659/984/original/qr_code_20261019-1-30kk5k.png",
+            "email": null,
+            "sms_number": "+15555550102",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "135790",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/38659984/b8cf241d6cd0ef26505a9ec1ebf8e41e",
+            "sent_at": "2026-10-19T22:54:30Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "38703205",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Guest Three",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/038/703/205/original/qr_code_20261016-1-i0ihl6.png",
+            "email": null,
+            "sms_number": "+15555550103",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "098765",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/38703205/a6796324518f06b196ed78264f6d0180",
+            "sent_at": "2026-10-16T07:11:00Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": [
+                {
+                  "id": "7504900729",
+                  "type": "door_releases"
+                }
+              ]
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "7504900729",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "qr_key",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-10-16T07:23:53Z",
+            "logged_at": "2026-10-16T07:23:53Z",
+            "thumb_url": "https://example.com/images/38.jpg",
+            "medium_url": "https://example.com/images/38.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "35327219",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Guest Four",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/035/327/219/original/qr_code_20260812-1-0g745j.png",
+            "email": null,
+            "sms_number": "+15555550104",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "314159",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/35327219/f6a8be1d41e532d941ef9e5e38096eb8",
+            "sent_at": "2026-08-12T20:50:51Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": [
+                {
+                  "id": "8236292686",
+                  "type": "door_releases"
+                },
+                {
+                  "id": "5879189466",
+                  "type": "door_releases"
+                },
+                {
+                  "id": "2844355202",
+                  "type": "door_releases"
+                },
+                {
+                  "id": "6606948965",
+                  "type": "door_releases"
+                },
+                {
+                  "id": "7270984792",
+                  "type": "door_releases"
+                },
+                {
+                  "id": "6325165627",
+                  "type": "door_releases"
+                }
+              ]
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "8236292686",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "virtual_key_pin",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-08-12T23:09:20Z",
+            "logged_at": "2026-08-12T23:09:19Z",
+            "thumb_url": "https://example.com/images/39.jpg",
+            "medium_url": "https://example.com/images/39.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "5879189466",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "virtual_key_pin",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-08-12T23:32:29Z",
+            "logged_at": "2026-08-12T23:32:29Z",
+            "thumb_url": "https://example.com/images/40.jpg",
+            "medium_url": "https://example.com/images/40.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "2844355202",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "qr_key",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-08-16T07:16:07Z",
+            "logged_at": "2026-08-16T07:16:06Z",
+            "thumb_url": "https://example.com/images/41.jpg",
+            "medium_url": "https://example.com/images/41.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "6606948965",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "virtual_key_pin",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-08-31T02:52:48Z",
+            "logged_at": "2026-08-31T02:52:48Z",
+            "thumb_url": "https://example.com/images/42.jpg",
+            "medium_url": "https://example.com/images/42.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "7270984792",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "virtual_key_pin",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-10-07T02:12:01Z",
+            "logged_at": "2026-10-07T02:12:01Z",
+            "thumb_url": "https://example.com/images/43.jpg",
+            "medium_url": "https://example.com/images/43.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "6325165627",
+          "type": "door_releases",
+          "attributes": {
+            "release_method": "virtual_key_pin",
+            "door_release_type": "visitor",
+            "panel_user_type": "default",
+            "call_guid": null,
+            "delivery_guid": null,
+            "name": "Resident Example",
+            "created_at": "2026-11-04T05:34:31Z",
+            "logged_at": "2026-11-04T05:34:31Z",
+            "thumb_url": "https://example.com/images/44.jpg",
+            "medium_url": "https://example.com/images/44.jpg"
+          },
+          "relationships": {
+            "unit": {
+              "data": {
+                "id": "7761820",
+                "type": "units"
+              }
+            },
+            "user": {
+              "data": {
+                "id": "563494348",
+                "type": "users"
+              }
+            },
+            "panel": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            },
+            "device": {
+              "data": {
+                "id": "38211",
+                "type": "panels"
+              }
+            }
+          }
+        },
+        {
+          "id": "85404824",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Guest Five",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/085/404/824/original/qr_code_20260322-1-0l1jjj.png",
+            "email": null,
+            "sms_number": "+15555550105",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "271828",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/85404824/87488e063bcbb86f7576873c53cd2ab7",
+            "sent_at": "2026-03-22T01:48:56Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "57620235",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Resident Example",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/057/620/235/original/qr_code_20261112-1-877ll3.png",
+            "email": "resident@example.com",
+            "sms_number": null,
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "573920",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/57620235/40a597d03d3f0e1752d3e1d8327a65ac",
+            "sent_at": "2026-11-12T05:03:18Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "13673",
+          "type": "cloud_keyz_controllers",
+          "attributes": {
+            "name": "Side Door"
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "18461",
+          "type": "cloud_keyz_controllers",
+          "attributes": {
+            "name": "Front Door & Stairwell Door"
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "69527006",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Delivery Pass",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/069/527/006/original/qr_code_20261028-1-jl9022.png",
+            "email": null,
+            "sms_number": null,
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "024680",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/69527006/e2d9a7b12e57326dba2309d144cc368a",
+            "sent_at": null,
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "50410",
+          "type": "cloud_keyz_controllers",
+          "attributes": {
+            "name": "Bike Room & Garage Gate"
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "44122212",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Resident Example",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/044/122/212/original/qr_code_20261112-1-80j1j8.png",
+            "email": "resident@example.com",
+            "sms_number": null,
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "161803",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/44122212/f59f1ebad779040591dca103f3c4b060",
+            "sent_at": "2026-11-12T05:01:51Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "12915969",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Resident Example",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/012/915/969/original/qr_code_20261112-1-664735.png",
+            "email": null,
+            "sms_number": "+15555550100",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "112358",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/12915969/28a805c08557b8281ed0251f1bcc848a",
+            "sent_at": "2026-11-12T05:02:11Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        }
+      ],
+      "links": {
+        "self": "https://api.butterflymx.com/v3/access_codes?filter%5Bstatus%5D=active&filter%5Btenant%5D=7754340&include=devices%2Cvirtual_keys%2Cvirtual_keys.door_releases%2Cvirtual_keys.door_releases.panel&page%5Bnumber%5D=1&page%5Bsize%5D=20",
+        "first": "https://api.butterflymx.com/v3/access_codes?filter%5Bstatus%5D=active&filter%5Btenant%5D=7754340&include=devices%2Cvirtual_keys%2Cvirtual_keys.door_releases%2Cvirtual_keys.door_releases.panel&page%5Bnumber%5D=1&page%5Bsize%5D=20",
+        "prev": null,
+        "next": null,
+        "last": "https://api.butterflymx.com/v3/access_codes?filter%5Bstatus%5D=active&filter%5Btenant%5D=7754340&include=devices%2Cvirtual_keys%2Cvirtual_keys.door_releases%2Cvirtual_keys.door_releases.panel&page%5Bnumber%5D=1&page%5Bsize%5D=20"
+      }
+    }
+  }
+}

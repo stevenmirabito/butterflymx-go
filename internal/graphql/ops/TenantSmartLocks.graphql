@@ -1,0 +1,4 @@
+query TenantSmartLocks($ids: [ID!]!, $excludeAccessPointLocks: Boolean, $after: String) { nodes(ids: $ids) { __typename id ... on Tenant { smartLocks(excludeAccessPointLocks: $excludeAccessPointLocks, after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...SmartLockFragment } } } } }
+fragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }
+fragment SmartLockFragment on SmartLock { __typename id name legacyDeviceId capabilities atUnitDoors batteryLevel brand inSync inSyncAt outOfSyncAt wifiEnabled online accessTimes { __typename ...TimeRestrictionFragment } details { __typename ... on YaleSmartLockDetails { houseId lockId serialNumber } ... on KwiksetSmartLockDetails { deviceId siteId } } }
+fragment TimeRestrictionFragment on TimeRestriction { __typename from to days }

@@ -1,0 +1,48 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantLPRSettings",
+      "query": "query TenantLPRSettings($ids: [ID!]!) { nodes(ids: $ids) { __typename id ... on Tenant { vehicleAccessToolLimit vehicleAccessToolsEnabled vehicleVisitorPassesEnabled } } }",
+      "variables": {
+        "ids": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"0c64b73394895723581338937f513889\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "vehicleAccessToolLimit": null,
+            "vehicleAccessToolsEnabled": false,
+            "vehicleVisitorPassesEnabled": false
+          }
+        ]
+      }
+    }
+  }
+}

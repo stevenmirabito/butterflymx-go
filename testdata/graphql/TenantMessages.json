@@ -1,0 +1,56 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantMessages",
+      "query": "query TenantMessages($tenantIds: [ID!]!, $imageSize: String = \"thumb\", $after: String) { nodes(ids: $tenantIds) { __typename id ... on Tenant { messages(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ... on TextMessage { ...TenantMessageFragment } } } } } }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment TenantMessageFragment on TextMessage { __typename id title body createdAt logoUrl(size: $imageSize) imageUrl(size: $imageSize) origin source { __typename ... on Device { name } } }",
+      "variables": {
+        "after": "",
+        "imageSize": "medium",
+        "tenantIds": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"a2f9593bed5cb5dead74d5897db88255\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "messages": {
+              "__typename": "MessageUnionConnection",
+              "pageInfo": {
+                "__typename": "PageInfo",
+                "hasNextPage": false,
+                "endCursor": null
+              },
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantSmartLocks",
+      "query": "query TenantSmartLocks($ids: [ID!]!, $excludeAccessPointLocks: Boolean, $after: String) { nodes(ids: $ids) { __typename id ... on Tenant { smartLocks(excludeAccessPointLocks: $excludeAccessPointLocks, after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...SmartLockFragment } } } } }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment SmartLockFragment on SmartLock { __typename id name legacyDeviceId capabilities atUnitDoors batteryLevel brand inSync inSyncAt outOfSyncAt wifiEnabled online accessTimes { __typename ...TimeRestrictionFragment } details { __typename ... on YaleSmartLockDetails { houseId lockId serialNumber } ... on KwiksetSmartLockDetails { deviceId siteId } } }\nfragment TimeRestrictionFragment on TimeRestriction { __typename from to days }",
+      "variables": {
+        "excludeAccessPointLocks": true,
+        "ids": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"140f986102d842e8b3adef1d4e35755f\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "smartLocks": {
+              "__typename": "SmartLockConnection",
+              "pageInfo": {
+                "__typename": "PageInfo",
+                "hasNextPage": false,
+                "endCursor": null
+              },
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

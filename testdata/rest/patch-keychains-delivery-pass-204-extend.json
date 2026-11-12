@@ -1,0 +1,56 @@
+{
+  "request": {
+    "method": "PATCH",
+    "path": "/v3/keychains/delivery_pass/75337466",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": {
+      "data": {
+        "type": "keychains",
+        "attributes": {
+          "allow_unit_access": false,
+          "time_from": "21:12",
+          "start_date": "2026-11-11",
+          "weekdays": [],
+          "starts_at": "2026-11-12T05:12:03Z",
+          "ends_at": "2027-01-10T21:12:03-0800",
+          "time_to": "21:12",
+          "end_date": "2026-12-11",
+          "name": "Test Delivery",
+          "kind": "delivery_pass"
+        },
+        "relationships": {
+          "tenant": {
+            "data": {
+              "id": null,
+              "type": "tenants"
+            }
+          },
+          "devices": {
+            "data": []
+          },
+          "virtual_keys": {
+            "data": [
+              {
+                "type": "virtual_keys",
+                "id": "55244830"
+              }
+            ]
+          },
+          "access_points": {
+            "data": []
+          }
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 204,
+    "headers": {},
+    "body": null
+  }
+}

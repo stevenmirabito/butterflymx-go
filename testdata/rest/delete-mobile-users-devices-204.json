@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/mobile/v4/users/devices/65794426",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 204,
+    "headers": {},
+    "body": null
+  }
+}

@@ -1,0 +1,5 @@
+query TenantCalls($tenantIds: [ID!]!, $after: String) { nodes(ids: $tenantIds) { __typename id ... on Tenant { calls(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...TenantCallFragment } } } } }
+fragment DeviceFragment on Device { __typename ...NodeFragment name }
+fragment NodeFragment on Node { __typename id }
+fragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }
+fragment TenantCallFragment on Call { __typename id guid loggedAt imageUrl notificationType displayStatus device { __typename ...DeviceFragment } }

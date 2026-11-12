@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/denizen/v1/logout",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1001.125.2 (com.butterflymx.butterflymx; build:1266; iOS 27.2.0) Alamofire/5.10.2"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": null
+  }
+}

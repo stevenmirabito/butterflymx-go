@@ -1,0 +1,104 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "Tenants",
+      "query": "query Tenants($after: String) { tenants(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...TenantFragment } } }\nfragment BuildingFragment on Building { __typename id guid name address { __typename country } capabilities enabledIntegrations contactLabel contactPhoneNumber timeZone amenityReservationsFeeStrategy virtualKeysDurationPeriod geofence { __typename id centerLatitude centerLongitude radiusUnit radiusValue } suspended }\nfragment NotificationPreferenceFragment on NotificationPreference { __typename call doNotDisturb doorOpen message }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment TenantFragment on Tenant { __typename id firstName lastName name inactiveAfter awayMessage pinCode legacyPinCode deliveryPassEnabled virtualKeyEnabled privacyConsentGiven virtualFobEntryEnabled unit { __typename ...UnitFragment } building { __typename ...BuildingFragment } notificationPreference { __typename ...NotificationPreferenceFragment } geofenceEnabled maintenanceRequestsEnabled }\nfragment UnitFragment on Unit { __typename id label floorNumber }",
+      "variables": {}
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"4de4b61b7970397486b4b9dc48764aa7\""
+    },
+    "body": {
+      "data": {
+        "tenants": {
+          "__typename": "TenantConnection",
+          "pageInfo": {
+            "__typename": "PageInfo",
+            "hasNextPage": false,
+            "endCursor": "MQ"
+          },
+          "nodes": [
+            {
+              "__typename": "Tenant",
+              "id": "prod-tenant-7754340",
+              "firstName": "Resident",
+              "lastName": "Example",
+              "name": "Resident Example",
+              "inactiveAfter": null,
+              "awayMessage": null,
+              "pinCode": "012345",
+              "legacyPinCode": null,
+              "deliveryPassEnabled": true,
+              "virtualKeyEnabled": true,
+              "privacyConsentGiven": true,
+              "virtualFobEntryEnabled": false,
+              "unit": {
+                "__typename": "Unit",
+                "id": "prod-unit-7761820",
+                "label": "4B",
+                "floorNumber": "4"
+              },
+              "building": {
+                "__typename": "Building",
+                "id": "prod-building-78323",
+                "guid": "prod-core-na-building-78323",
+                "name": "Example Tower",
+                "address": {
+                  "__typename": "Address",
+                  "country": "us"
+                },
+                "capabilities": [
+                  "BLE_ACCESS_ENABLED",
+                  "DELIVERY_PASS_ENABLED",
+                  "DOOR_PIN_ENABLED",
+                  "VIRTUAL_KEYS_ENABLED"
+                ],
+                "enabledIntegrations": [],
+                "contactLabel": "",
+                "contactPhoneNumber": null,
+                "timeZone": "America/Los_Angeles",
+                "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                "virtualKeysDurationPeriod": 365,
+                "geofence": null,
+                "suspended": false
+              },
+              "notificationPreference": {
+                "__typename": "NotificationPreference",
+                "call": "VIDEO_CALL",
+                "doNotDisturb": false,
+                "doorOpen": [
+                  "NOTIFICATION"
+                ],
+                "message": [
+                  "NOTIFICATION",
+                  "SMS"
+                ]
+              },
+              "geofenceEnabled": false,
+              "maintenanceRequestsEnabled": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

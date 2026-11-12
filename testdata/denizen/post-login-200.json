@@ -1,0 +1,35 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/login",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "user-agent": "butterflymx/1001.125.2 (com.butterflymx.butterflymx; build:1266; iOS 27.2.0) Alamofire/5.10.2"
+    },
+    "body": {
+      "device": {
+        "locales": [
+          "en-US",
+          "com-US"
+        ],
+        "platform": "ios",
+        "version": "1001.125.2",
+        "token": "FAKE_PUSH_TOKEN",
+        "voip_token": "FAKE_VOIP_TOKEN"
+      },
+      "access_token": "FAKE_ACCESS_TOKEN"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"500ba4a72f06361aa91018ef4da4ca65\""
+    },
+    "body": {
+      "token": "FAKE_API_TOKEN"
+    }
+  }
+}

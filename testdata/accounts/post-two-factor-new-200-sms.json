@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/sessions/two_factor_authentication/new",
+    "query": {
+      "type": "sms"
+    },
+    "headers": {
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "content-type": "application/x-www-form-urlencoded",
+      "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8",
+      "etag": "W/\"22d4a50527e7eaf0df7e8a9b851c96e2\""
+    },
+    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n <head>\n  <title>\n   ButterflyMX - Verify with text message\n  </title>\n  <meta content=\"authenticity_token\" name=\"csrf-param\"/>\n  <meta content=\"pxMnfAQ4b8Is6jDyFVk1IdluO3i76fKWPX1pRigShsoiQFd8G6tBC8Hh-LD_Pd4gmkfWX7RPxZgzBV0S-RJovA\" name=\"csrf-token\"/>\n </head>\n <body>\n  <div>\n   <div>\n    <div>\n     <div>\n      <div>\n       <h2>\n        Property access made simple\n       </h2>\n      </div>\n     </div>\n    </div>\n   </div>\n   <main>\n    <div id=\"content\">\n     <div id=\"flash_messages\">\n     </div>\n     <div>\n      <div>\n       <div>\n        <div>\n         <a href=\"https://butterflymx.com\">\n         </a>\n        </div>\n       </div>\n       <div>\n        <div>\n         <h1>\n          Verify with text message\n         </h1>\n         <h2>\n          A 6-digit code has been sent to your phone number ******0100\n         </h2>\n        </div>\n        <div>\n         <form accept-charset=\"UTF-8\" action=\"/sessions/two_factor_authentication\" method=\"post\">\n          <input name=\"authenticity_token\" type=\"hidden\" value=\"lxkv6nkhCrBbAikFh4ixbPt3FB-aVjlJ8Xpb5M516-6MkJgAWnXklMGX9sX2UlYvZN6moa-DS4nrnNswtBDkyQ\"/>\n          <input id=\"type\" name=\"type\" type=\"hidden\" value=\"sms\"/>\n          <div>\n           <div>\n            <label for=\"code\">\n             <span>\n              Verification code\n             </span>\n            </label>\n            <input autocomplete=\"one-time-code\" id=\"code\" inputmode=\"numeric\" maxlength=\"6\" name=\"code\" pattern=\"[0-9]*\" size=\"6\" type=\"text\"/>\n           </div>\n          </div>\n          <input name=\"commit\" type=\"submit\" value=\"Use code\"/>\n         </form>\n         <form action=\"/sessions/two_factor_authentication/new?type=sms\" method=\"post\">\n          <button type=\"submit\">\n           Resend code\n          </button>\n          <input name=\"authenticity_token\" type=\"hidden\" value=\"18XyCLvie9xMbXZqKEklyUPqtkHc2FdV3BIX-7onMnhRHkmvJC5MZiWOdmC16QQBYN-Tor-xRWMtQEo2M7sSzg\"/>\n          <input name=\"context\" type=\"hidden\" value=\"resend\"/>\n         </form>\n         <a href=\"/sessions/two_factor_authentication\">\n          Verify another way\n         </a>\n        </div>\n       </div>\n       <div>\n        <div>\n         <div>\n          By signing in, you agree with our\n          <a href=\"/terms-and-conditions\" target=\"_top\">\n           Terms and Policies\n          </a>\n         </div>\n        </div>\n        <div>\n         ©2026  ButterflyMX, Inc.\n        </div>\n       </div>\n      </div>\n     </div>\n    </div>\n   </main>\n  </div>\n </body>\n</html>\n"
+  }
+}

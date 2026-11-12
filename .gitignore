@@ -1,0 +1,21 @@
+# Raw traffic captures contain passwords, tokens and PINs. Never commit them.
+/captures/
+*.flows
+*.har
+
+# Credentials
+tokens*.json
+*.token
+.env
+.env.*
+
+# Build output
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# CLI binary built with `go build ./cmd/bmx`
+/bmx
+/cmd/bmx/bmx

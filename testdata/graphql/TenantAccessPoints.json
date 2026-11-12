@@ -1,0 +1,489 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantAccessPoints",
+      "query": "query TenantAccessPoints($ids: [ID!]!, $after: String) { nodes(ids: $ids) { __typename id ... on Tenant { accessPoints(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...AccessPointFragment } } } } }\nfragment AccessPointFragment on AccessPoint { __typename id legacyId name capabilities openDuration online inOpenHours doorOpenSchedules { __typename ...TimeRestrictionFragment } accessTimes { __typename ...TimeRestrictionFragment } building { __typename ...BuildingFragment } reservations { __typename ...AccessPointReservationFragment } devices { __typename nodes { __typename ... on Intercom { id name serialNumber } ... on CloudBasedAccessController { id name readerSerialNumbers } } } }\nfragment AccessPointReservationFragment on ReservationUnionConnection { __typename nodes { __typename ... on AnonymousReservation { id startsAt endsAt } ... on Reservation { id startsAt endsAt amenity { __typename id } } } }\nfragment BuildingFragment on Building { __typename id guid name address { __typename country } capabilities enabledIntegrations contactLabel contactPhoneNumber timeZone amenityReservationsFeeStrategy virtualKeysDurationPeriod geofence { __typename id centerLatitude centerLongitude radiusUnit radiusValue } suspended }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment TimeRestrictionFragment on TimeRestriction { __typename from to days }",
+      "variables": {
+        "ids": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"9c9baafd9d065a76283f78e5c8f0082e\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "accessPoints": {
+              "__typename": "AccessPointConnection",
+              "pageInfo": {
+                "__typename": "PageInfo",
+                "hasNextPage": false,
+                "endCursor": "Ng"
+              },
+              "nodes": [
+                {
+                  "__typename": "AccessPoint",
+                  "id": "prod-access_point-51380",
+                  "legacyId": "51380",
+                  "name": "Bike Room",
+                  "capabilities": [
+                    "BLUETOOTH",
+                    "DOOR_PINS",
+                    "SWIPE_TO_OPEN",
+                    "VIRTUAL_KEYS"
+                  ],
+                  "openDuration": 8,
+                  "online": true,
+                  "inOpenHours": false,
+                  "doorOpenSchedules": [],
+                  "accessTimes": [
+                    {
+                      "__typename": "TimeRestriction",
+                      "from": "00:00",
+                      "to": "00:00",
+                      "days": [
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                      ]
+                    }
+                  ],
+                  "building": {
+                    "__typename": "Building",
+                    "id": "prod-building-78323",
+                    "guid": "prod-core-na-building-78323",
+                    "name": "Example Tower",
+                    "address": {
+                      "__typename": "Address",
+                      "country": "us"
+                    },
+                    "capabilities": [
+                      "BLE_ACCESS_ENABLED",
+                      "DELIVERY_PASS_ENABLED",
+                      "DOOR_PIN_ENABLED",
+                      "VIRTUAL_KEYS_ENABLED"
+                    ],
+                    "enabledIntegrations": [],
+                    "contactLabel": "",
+                    "contactPhoneNumber": null,
+                    "timeZone": "America/Los_Angeles",
+                    "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                    "virtualKeysDurationPeriod": 365,
+                    "geofence": null,
+                    "suspended": false
+                  },
+                  "reservations": {
+                    "__typename": "ReservationUnionConnection",
+                    "nodes": []
+                  },
+                  "devices": {
+                    "__typename": "DeviceUnionConnection",
+                    "nodes": [
+                      {
+                        "__typename": "CloudBasedAccessController",
+                        "id": "prod-cloud_based_access_controller-51415",
+                        "name": "Bike Room & Garage Gate",
+                        "readerSerialNumbers": [
+                          "47790840536P5V4U"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "__typename": "AccessPoint",
+                  "id": "prod-access_point-85679",
+                  "legacyId": "85679",
+                  "name": "Garage Gate",
+                  "capabilities": [
+                    "BLUETOOTH",
+                    "DOOR_PINS",
+                    "SWIPE_TO_OPEN",
+                    "VIRTUAL_KEYS"
+                  ],
+                  "openDuration": 8,
+                  "online": true,
+                  "inOpenHours": false,
+                  "doorOpenSchedules": [],
+                  "accessTimes": [
+                    {
+                      "__typename": "TimeRestriction",
+                      "from": "00:00",
+                      "to": "00:00",
+                      "days": [
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                      ]
+                    }
+                  ],
+                  "building": {
+                    "__typename": "Building",
+                    "id": "prod-building-78323",
+                    "guid": "prod-core-na-building-78323",
+                    "name": "Example Tower",
+                    "address": {
+                      "__typename": "Address",
+                      "country": "us"
+                    },
+                    "capabilities": [
+                      "BLE_ACCESS_ENABLED",
+                      "DELIVERY_PASS_ENABLED",
+                      "DOOR_PIN_ENABLED",
+                      "VIRTUAL_KEYS_ENABLED"
+                    ],
+                    "enabledIntegrations": [],
+                    "contactLabel": "",
+                    "contactPhoneNumber": null,
+                    "timeZone": "America/Los_Angeles",
+                    "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                    "virtualKeysDurationPeriod": 365,
+                    "geofence": null,
+                    "suspended": false
+                  },
+                  "reservations": {
+                    "__typename": "ReservationUnionConnection",
+                    "nodes": []
+                  },
+                  "devices": {
+                    "__typename": "DeviceUnionConnection",
+                    "nodes": [
+                      {
+                        "__typename": "CloudBasedAccessController",
+                        "id": "prod-cloud_based_access_controller-51415",
+                        "name": "Bike Room & Garage Gate",
+                        "readerSerialNumbers": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "__typename": "AccessPoint",
+                  "id": "prod-access_point-27188",
+                  "legacyId": "27188",
+                  "name": "Stairwell Door",
+                  "capabilities": [
+                    "BLUETOOTH",
+                    "DOOR_PINS",
+                    "SWIPE_TO_OPEN",
+                    "VIRTUAL_KEYS"
+                  ],
+                  "openDuration": 8,
+                  "online": true,
+                  "inOpenHours": false,
+                  "doorOpenSchedules": [],
+                  "accessTimes": [
+                    {
+                      "__typename": "TimeRestriction",
+                      "from": "00:00",
+                      "to": "00:00",
+                      "days": [
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                      ]
+                    }
+                  ],
+                  "building": {
+                    "__typename": "Building",
+                    "id": "prod-building-78323",
+                    "guid": "prod-core-na-building-78323",
+                    "name": "Example Tower",
+                    "address": {
+                      "__typename": "Address",
+                      "country": "us"
+                    },
+                    "capabilities": [
+                      "BLE_ACCESS_ENABLED",
+                      "DELIVERY_PASS_ENABLED",
+                      "DOOR_PIN_ENABLED",
+                      "VIRTUAL_KEYS_ENABLED"
+                    ],
+                    "enabledIntegrations": [],
+                    "contactLabel": "",
+                    "contactPhoneNumber": null,
+                    "timeZone": "America/Los_Angeles",
+                    "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                    "virtualKeysDurationPeriod": 365,
+                    "geofence": null,
+                    "suspended": false
+                  },
+                  "reservations": {
+                    "__typename": "ReservationUnionConnection",
+                    "nodes": []
+                  },
+                  "devices": {
+                    "__typename": "DeviceUnionConnection",
+                    "nodes": [
+                      {
+                        "__typename": "CloudBasedAccessController",
+                        "id": "prod-cloud_based_access_controller-37363",
+                        "name": "Front Door & Stairwell Door",
+                        "readerSerialNumbers": [
+                          "24522633540Y5T78"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "__typename": "AccessPoint",
+                  "id": "prod-access_point-28821",
+                  "legacyId": "28821",
+                  "name": "Main Entrance",
+                  "capabilities": [
+                    "BLUETOOTH",
+                    "DOOR_PINS",
+                    "SWIPE_TO_OPEN",
+                    "VIRTUAL_KEYS"
+                  ],
+                  "openDuration": 9,
+                  "online": true,
+                  "inOpenHours": false,
+                  "doorOpenSchedules": [],
+                  "accessTimes": [
+                    {
+                      "__typename": "TimeRestriction",
+                      "from": "00:00",
+                      "to": "00:00",
+                      "days": [
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                      ]
+                    }
+                  ],
+                  "building": {
+                    "__typename": "Building",
+                    "id": "prod-building-78323",
+                    "guid": "prod-core-na-building-78323",
+                    "name": "Example Tower",
+                    "address": {
+                      "__typename": "Address",
+                      "country": "us"
+                    },
+                    "capabilities": [
+                      "BLE_ACCESS_ENABLED",
+                      "DELIVERY_PASS_ENABLED",
+                      "DOOR_PIN_ENABLED",
+                      "VIRTUAL_KEYS_ENABLED"
+                    ],
+                    "enabledIntegrations": [],
+                    "contactLabel": "",
+                    "contactPhoneNumber": null,
+                    "timeZone": "America/Los_Angeles",
+                    "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                    "virtualKeysDurationPeriod": 365,
+                    "geofence": null,
+                    "suspended": false
+                  },
+                  "reservations": {
+                    "__typename": "ReservationUnionConnection",
+                    "nodes": []
+                  },
+                  "devices": {
+                    "__typename": "DeviceUnionConnection",
+                    "nodes": [
+                      {
+                        "__typename": "Intercom",
+                        "id": "prod-intercom-86254",
+                        "name": "Main Entrance",
+                        "serialNumber": "I484-09857228"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "__typename": "AccessPoint",
+                  "id": "prod-access_point-61152",
+                  "legacyId": "61152",
+                  "name": "Side Door",
+                  "capabilities": [
+                    "BLUETOOTH",
+                    "DOOR_PINS",
+                    "SWIPE_TO_OPEN",
+                    "VIRTUAL_KEYS"
+                  ],
+                  "openDuration": 8,
+                  "online": true,
+                  "inOpenHours": false,
+                  "doorOpenSchedules": [],
+                  "accessTimes": [
+                    {
+                      "__typename": "TimeRestriction",
+                      "from": "00:00",
+                      "to": "00:00",
+                      "days": [
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                      ]
+                    }
+                  ],
+                  "building": {
+                    "__typename": "Building",
+                    "id": "prod-building-78323",
+                    "guid": "prod-core-na-building-78323",
+                    "name": "Example Tower",
+                    "address": {
+                      "__typename": "Address",
+                      "country": "us"
+                    },
+                    "capabilities": [
+                      "BLE_ACCESS_ENABLED",
+                      "DELIVERY_PASS_ENABLED",
+                      "DOOR_PIN_ENABLED",
+                      "VIRTUAL_KEYS_ENABLED"
+                    ],
+                    "enabledIntegrations": [],
+                    "contactLabel": "",
+                    "contactPhoneNumber": null,
+                    "timeZone": "America/Los_Angeles",
+                    "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                    "virtualKeysDurationPeriod": 365,
+                    "geofence": null,
+                    "suspended": false
+                  },
+                  "reservations": {
+                    "__typename": "ReservationUnionConnection",
+                    "nodes": []
+                  },
+                  "devices": {
+                    "__typename": "DeviceUnionConnection",
+                    "nodes": [
+                      {
+                        "__typename": "CloudBasedAccessController",
+                        "id": "prod-cloud_based_access_controller-28848",
+                        "name": "Side Door",
+                        "readerSerialNumbers": [
+                          "75538039711O9T98"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "__typename": "AccessPoint",
+                  "id": "prod-access_point-12921",
+                  "legacyId": "12921",
+                  "name": "Front Door",
+                  "capabilities": [
+                    "BLUETOOTH",
+                    "DOOR_PINS",
+                    "SWIPE_TO_OPEN",
+                    "VIRTUAL_KEYS"
+                  ],
+                  "openDuration": 8,
+                  "online": true,
+                  "inOpenHours": false,
+                  "doorOpenSchedules": [],
+                  "accessTimes": [
+                    {
+                      "__typename": "TimeRestriction",
+                      "from": "00:00",
+                      "to": "00:00",
+                      "days": [
+                        "MONDAY",
+                        "TUESDAY",
+                        "WEDNESDAY",
+                        "THURSDAY",
+                        "FRIDAY",
+                        "SATURDAY",
+                        "SUNDAY"
+                      ]
+                    }
+                  ],
+                  "building": {
+                    "__typename": "Building",
+                    "id": "prod-building-78323",
+                    "guid": "prod-core-na-building-78323",
+                    "name": "Example Tower",
+                    "address": {
+                      "__typename": "Address",
+                      "country": "us"
+                    },
+                    "capabilities": [
+                      "BLE_ACCESS_ENABLED",
+                      "DELIVERY_PASS_ENABLED",
+                      "DOOR_PIN_ENABLED",
+                      "VIRTUAL_KEYS_ENABLED"
+                    ],
+                    "enabledIntegrations": [],
+                    "contactLabel": "",
+                    "contactPhoneNumber": null,
+                    "timeZone": "America/Los_Angeles",
+                    "amenityReservationsFeeStrategy": "RECORD_PAYMENTS",
+                    "virtualKeysDurationPeriod": 365,
+                    "geofence": null,
+                    "suspended": false
+                  },
+                  "reservations": {
+                    "__typename": "ReservationUnionConnection",
+                    "nodes": []
+                  },
+                  "devices": {
+                    "__typename": "DeviceUnionConnection",
+                    "nodes": [
+                      {
+                        "__typename": "CloudBasedAccessController",
+                        "id": "prod-cloud_based_access_controller-37363",
+                        "name": "Front Door & Stairwell Door",
+                        "readerSerialNumbers": [
+                          "14712280125G0R40"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

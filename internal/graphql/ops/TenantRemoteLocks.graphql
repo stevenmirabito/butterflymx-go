@@ -1,0 +1,3 @@
+query TenantRemoteLocks($ids: [ID!]!, $after: String) { nodes(ids: $ids) { __typename id ... on Tenant { remoteLocks(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...RemoteLockFragment } } } } }
+fragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }
+fragment RemoteLockFragment on RemoteLock { __typename id name legacyDeviceId capabilities atUnitDoors }

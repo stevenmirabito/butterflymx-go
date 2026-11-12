@@ -1,0 +1,26 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v3/access_codes",
+    "query": {
+      "filter[tenant]": "7754340",
+      "include": "devices,virtual_keys,virtual_keys.door_releases,virtual_keys.door_releases.panel",
+      "page[size]": "20",
+      "filter[status]": "active",
+      "page[number]": "1"
+    },
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "if-none-match": "W/\"9b268b75b9c7adfbd55ee96d7420308d\""
+    },
+    "body": null
+  },
+  "response": {
+    "status": 304,
+    "headers": {
+      "etag": "W/\"9b268b75b9c7adfbd55ee96d7420308d\""
+    },
+    "body": null
+  }
+}

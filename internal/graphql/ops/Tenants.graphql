@@ -1,0 +1,6 @@
+query Tenants($after: String) { tenants(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...TenantFragment } } }
+fragment BuildingFragment on Building { __typename id guid name address { __typename country } capabilities enabledIntegrations contactLabel contactPhoneNumber timeZone amenityReservationsFeeStrategy virtualKeysDurationPeriod geofence { __typename id centerLatitude centerLongitude radiusUnit radiusValue } suspended }
+fragment NotificationPreferenceFragment on NotificationPreference { __typename call doNotDisturb doorOpen message }
+fragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }
+fragment TenantFragment on Tenant { __typename id firstName lastName name inactiveAfter awayMessage pinCode legacyPinCode deliveryPassEnabled virtualKeyEnabled privacyConsentGiven virtualFobEntryEnabled unit { __typename ...UnitFragment } building { __typename ...BuildingFragment } notificationPreference { __typename ...NotificationPreferenceFragment } geofenceEnabled maintenanceRequestsEnabled }
+fragment UnitFragment on Unit { __typename id label floorNumber }

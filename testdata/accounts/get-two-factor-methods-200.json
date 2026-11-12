@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/sessions/two_factor_authentication",
+    "query": {},
+    "headers": {
+      "accept": "text/html, application/xhtml+xml",
+      "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8",
+      "etag": "W/\"f031cb5f60e0d01e34830803cb0da8e9\""
+    },
+    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n <head>\n  <title>\n   ButterflyMX - How do you want to verify your account?\n  </title>\n  <meta content=\"authenticity_token\" name=\"csrf-param\"/>\n  <meta content=\"RdYj2rFy-tMjELqGjv755PxO40vx1WQ9lB97D4l_772EhIZd4S9iDOW87buBBbvylWBa7xbDs7whDP8rLt5lHg\" name=\"csrf-token\"/>\n </head>\n <body>\n  <div>\n   <div>\n    <div>\n     <div>\n      <div>\n       <h2>\n        Property access made simple\n       </h2>\n      </div>\n     </div>\n    </div>\n   </div>\n   <main>\n    <div id=\"content\">\n     <div id=\"flash_messages\">\n     </div>\n     <div>\n      <div>\n       <div>\n        <div>\n         <a href=\"https://butterflymx.com\">\n         </a>\n        </div>\n       </div>\n       <div>\n        <div>\n         <h1>\n          How do you want to verify your account?\n         </h1>\n         <h2>\n          Choose one of the following options to use a 2nd factor authentication method\n         </h2>\n        </div>\n        <div>\n         <form action=\"/sessions/two_factor_authentication/new?type=email\" method=\"post\">\n          <button type=\"submit\">\n           <div>\n            <img src=\"/assets/authentication/email-28f4bfc7.svg\"/>\n           </div>\n           <div>\n            <h3>\n             Email\n            </h3>\n            <div>\n             Receive a code from your ButterflyMX email address\n            </div>\n           </div>\n           <div>\n           </div>\n          </button>\n          <input name=\"authenticity_token\" type=\"hidden\" value=\"yNEp_8pYPmKslC7c3AubHCyCESM6oASNwVSfoNnVPl3m7OkDKg2-tgIog89uIDbICRCuCCtd6sVKxa8Tp-Rniw\"/>\n         </form>\n         <form action=\"/sessions/two_factor_authentication/new?type=sms\" method=\"post\">\n          <button type=\"submit\">\n           <div>\n            <img src=\"/assets/authentication/text-0ca07fd0.svg\"/>\n           </div>\n           <div>\n            <h3>\n             Text message\n            </h3>\n            <div>\n             Receive a code via text on your mobile device\n            </div>\n           </div>\n           <div>\n           </div>\n          </button>\n          <input name=\"authenticity_token\" type=\"hidden\" value=\"7ZrTf2G-v3WLj5LkblPCX24CMUsE-ek9kV_xBlP1qXmnnZBh5zr-CrxKpzwACeJkpriWHd9bNImErIHKgzXv5A\"/>\n         </form>\n         <form action=\"/sessions/two_factor_authentication/new?type=authenticator_app\" method=\"post\">\n          <button type=\"submit\">\n           <div>\n            <img src=\"/assets/authentication/authenticator-237155f6.svg\"/>\n           </div>\n           <div>\n            <h3>\n             Authenticator app\n            </h3>\n            <div>\n             Receive a code from an authenticator app\n            </div>\n           </div>\n           <div>\n           </div>\n          </button>\n          <input name=\"authenticity_token\" type=\"hidden\" value=\"brY7CiBuVDAZ4fW2xMoz6dKYG_AiZM5kNRQqvvCewLatn-OptxyCYO7QKfEw-EZ4KjdZCSVK9iYe0zWFcCG_6A\"/>\n         </form>\n        </div>\n       </div>\n       <div>\n        <div>\n         <div>\n          If you can't verify your account, contact us:\n         </div>\n         <a href=\"mailto:support@butterflymx.com\">\n          support@butterflymx.com\n         </a>\n         <a href=\"tel:8003984416\">\n          (800) 398-4416\n         </a>\n        </div>\n        <div>\n         ©2026  ButterflyMX, Inc.\n        </div>\n       </div>\n      </div>\n     </div>\n    </div>\n   </main>\n  </div>\n </body>\n</html>\n"
+  }
+}

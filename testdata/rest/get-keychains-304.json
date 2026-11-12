@@ -1,0 +1,22 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v3/keychains/35154212",
+    "query": {
+      "include": "virtual_keys"
+    },
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "if-none-match": "W/\"7644c3993da623cc67488c0b8cbf004d\""
+    },
+    "body": null
+  },
+  "response": {
+    "status": 304,
+    "headers": {
+      "etag": "W/\"7644c3993da623cc67488c0b8cbf004d\""
+    },
+    "body": null
+  }
+}

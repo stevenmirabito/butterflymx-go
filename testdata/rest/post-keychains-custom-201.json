@@ -1,0 +1,221 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v3/keychains/custom",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": {
+      "data": {
+        "relationships": {
+          "virtual_keys": {
+            "data": []
+          },
+          "devices": {
+            "data": []
+          },
+          "tenant": {
+            "data": {
+              "type": "tenants",
+              "id": "7754340"
+            }
+          },
+          "access_points": {
+            "data": [
+              {
+                "type": "access_points",
+                "id": "51380"
+              },
+              {
+                "type": "access_points",
+                "id": "85679"
+              },
+              {
+                "type": "access_points",
+                "id": "27188"
+              },
+              {
+                "type": "access_points",
+                "id": "28821"
+              },
+              {
+                "type": "access_points",
+                "id": "61152"
+              },
+              {
+                "type": "access_points",
+                "id": "12921"
+              }
+            ]
+          }
+        },
+        "attributes": {
+          "allow_unit_access": false,
+          "end_date": null,
+          "weekdays": null,
+          "recipients": [
+            {
+              "name": "Resident Example",
+              "deliver_to": "resident@example.com"
+            }
+          ],
+          "start_date": null,
+          "kind": "custom",
+          "starts_at": "2026-11-12T05:00:00Z",
+          "time_to": null,
+          "time_from": null,
+          "name": "Test",
+          "ends_at": "2026-11-12T06:00:00Z"
+        },
+        "type": "keychains"
+      }
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "content-type": "application/vnd.api+json; charset=utf-8",
+      "etag": "W/\"d18720678707ee5c3520499caa582307\""
+    },
+    "body": {
+      "data": {
+        "id": "85303961",
+        "type": "keychains",
+        "attributes": {
+          "name": "Test",
+          "weekdays": [],
+          "starts_at": "2026-11-12T05:00:00Z",
+          "ends_at": "2026-11-12T06:00:00Z",
+          "time_from": "21:00",
+          "time_to": "22:00",
+          "kind": "custom",
+          "start_date": "2026-11-11",
+          "end_date": "2026-11-11",
+          "allow_unit_access": false
+        },
+        "relationships": {
+          "virtual_keys": {
+            "data": [
+              {
+                "id": "44122212",
+                "type": "virtual_keys"
+              }
+            ]
+          },
+          "devices": {
+            "data": [
+              {
+                "id": "50410",
+                "type": "cloud_keyz_controllers"
+              },
+              {
+                "id": "18461",
+                "type": "cloud_keyz_controllers"
+              },
+              {
+                "id": "38211",
+                "type": "panels"
+              },
+              {
+                "id": "13673",
+                "type": "cloud_keyz_controllers"
+              }
+            ]
+          }
+        }
+      },
+      "included": [
+        {
+          "id": "44122212",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Resident Example",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/044/122/212/original/qr_code_20261112-1-80j1j8.png",
+            "email": "resident@example.com",
+            "sms_number": null,
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "161803",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/44122212/f59f1ebad779040591dca103f3c4b060",
+            "sent_at": null,
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        },
+        {
+          "id": "50410",
+          "type": "cloud_keyz_controllers",
+          "attributes": {
+            "name": "Bike Room & Garage Gate"
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "18461",
+          "type": "cloud_keyz_controllers",
+          "attributes": {
+            "name": "Front Door & Stairwell Door"
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "38211",
+          "type": "panels",
+          "attributes": {
+            "name": "Main Entrance",
+            "nfc": {
+              "uuid": ""
+            }
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        },
+        {
+          "id": "13673",
+          "type": "cloud_keyz_controllers",
+          "attributes": {
+            "name": "Side Door"
+          },
+          "relationships": {
+            "building": {
+              "data": {
+                "id": "78323",
+                "type": "buildings"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/oauth/token",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": {
+      "code": "p8PWxZlTHMTfdLJ1_UPSU8lLBRv5Ws0dxE8iX5-iYj5",
+      "code_verifier": "NH-NWDjwVUhXDt0fTEfwIpDw631K3HyCplk1tM_AQzG",
+      "redirect_uri": "com.butterflymx.oauth://oauth",
+      "client_id": "0e3aeeb7cec2782b9fb21352a4349a44405ed5d7674072416b6481d51abfd6b6",
+      "grant_type": "authorization_code"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"0b232c18502c2dcc3aecaf219d710741\""
+    },
+    "body": {
+      "access_token": "FAKE_ACCESS_TOKEN",
+      "token_type": "Bearer",
+      "expires_in": 86400,
+      "refresh_token": "FAKE_REFRESH_TOKEN",
+      "scope": "openid profile",
+      "created_at": 1794459643,
+      "id_token": "FAKE_ID_TOKEN"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1/access-point",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": {
+      "accessPointId": "prod-access_point-12921",
+      "source": "mobile_app",
+      "tenantId": "prod-tenant-7754340"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"c616b4b2c02fb5f088f5f4f8d9d6abba\""
+    },
+    "body": {
+      "requestId": "daa4a761-1dab-4849-a5cf-44fb8a317c3b"
+    }
+  }
+}

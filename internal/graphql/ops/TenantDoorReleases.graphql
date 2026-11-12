@@ -1,0 +1,6 @@
+query TenantDoorReleases($tenantIds: [ID!]!, $after: String) { nodes(ids: $tenantIds) { __typename id ... on Tenant { doorReleases(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...TenantDoorReleaseFragment } } } } }
+fragment AccessPointNameFragment on AccessPoint { __typename ...NodeFragment name }
+fragment DeviceFragment on Device { __typename ...NodeFragment name }
+fragment NodeFragment on Node { __typename id }
+fragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }
+fragment TenantDoorReleaseFragment on DoorRelease { __typename id loggedAt imageUrl licensePlate { __typename id number issuer { __typename id name country } } type method accessPoint { __typename ...AccessPointNameFragment } device { __typename ...DeviceFragment } }

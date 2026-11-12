@@ -1,0 +1,66 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v3/keychains/85303961/virtual_keys",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": {
+      "data": {
+        "type": "virtual_keys",
+        "attributes": {
+          "pin": null,
+          "sms_number": null,
+          "recipients": [
+            {
+              "name": "Resident Example",
+              "deliver_to": "(555) 555-0100"
+            }
+          ],
+          "used_at": null,
+          "email": null,
+          "name": null,
+          "qr_code_image_url": null
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "content-type": "application/vnd.api+json; charset=utf-8",
+      "etag": "W/\"4e0a1a42a36a29631870ced439b1616e\""
+    },
+    "body": {
+      "data": [
+        {
+          "id": "12915969",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Resident Example",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/012/915/969/original/qr_code_20261112-1-664735.png",
+            "email": null,
+            "sms_number": "+15555550100",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "112358",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/12915969/28a805c08557b8281ed0251f1bcc848a",
+            "sent_at": null,
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        }
+      ]
+    }
+  }
+}

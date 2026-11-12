@@ -1,0 +1,22 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/sessions/two_factor_authentication/new",
+    "query": {
+      "type": "authenticator_app"
+    },
+    "headers": {
+      "accept": "text/vnd.turbo-stream.html, text/html, application/xhtml+xml",
+      "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8",
+      "etag": "W/\"d8fdf90c7ec8f28448c6eba5aef2fa59\""
+    },
+    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n <head>\n  <title>\n   ButterflyMX - Verify with an authenticator app\n  </title>\n  <meta content=\"authenticity_token\" name=\"csrf-param\"/>\n  <meta content=\"QPQh--sb2ZDTEkZ_yxsKknONGWDi6DcFMA-xjoL2_poSTmjDVg88ihGWBrlTbf7zDK4rThFBw1vjaPOIbGjPX2\" name=\"csrf-token\"/>\n </head>\n <body>\n  <div>\n   <div>\n    <div>\n     <div>\n      <div>\n       <h2>\n        Property access made simple\n       </h2>\n      </div>\n     </div>\n    </div>\n   </div>\n   <main>\n    <div id=\"content\">\n     <div id=\"flash_messages\">\n     </div>\n     <div>\n      <div>\n       <div>\n        <div>\n         <a href=\"https://butterflymx.com\">\n         </a>\n        </div>\n       </div>\n       <div>\n        <div>\n         <h1>\n          Verify with an authenticator app\n         </h1>\n         <h2>\n          Enter the verification code the authenticator app provides\n         </h2>\n        </div>\n        <div>\n         <form accept-charset=\"UTF-8\" action=\"/sessions/two_factor_authentication\" method=\"post\">\n          <input name=\"authenticity_token\" type=\"hidden\" value=\"S0XbjOaW8cOL_bu45DcEKmGPJr8tAIJmOAVUM-pnBiFF5t4PH4JyEpxSV_LClD9NUfhmANRAi_T9vhrIdoQBfE\"/>\n          <input id=\"type\" name=\"type\" type=\"hidden\" value=\"authenticator_app\"/>\n          <div>\n           <div>\n            <label for=\"code\">\n             <span>\n              Verification code\n             </span>\n            </label>\n            <input autocomplete=\"one-time-code\" id=\"code\" inputmode=\"numeric\" maxlength=\"6\" name=\"code\" pattern=\"[0-9]*\" size=\"6\" type=\"text\"/>\n           </div>\n          </div>\n          <input name=\"commit\" type=\"submit\" value=\"Use code\"/>\n         </form>\n         <a href=\"/sessions/two_factor_authentication\">\n          Verify another way\n         </a>\n        </div>\n       </div>\n       <div>\n        <div>\n         <div>\n          By signing in, you agree with our\n          <a href=\"/terms-and-conditions\" target=\"_top\">\n           Terms and Policies\n          </a>\n         </div>\n        </div>\n        <div>\n         ©2026  ButterflyMX, Inc.\n        </div>\n       </div>\n      </div>\n     </div>\n    </div>\n   </main>\n  </div>\n </body>\n</html>\n"
+  }
+}

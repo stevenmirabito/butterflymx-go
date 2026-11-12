@@ -1,0 +1,57 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/mobile/v4/users/devices",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "content-type": "application/x-www-form-urlencoded; charset=utf-8",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": {
+      "device[client]": "iphone",
+      "device[voip_token]": "FAKE_VOIP_TOKEN",
+      "device[locales][]": [
+        "en-US",
+        "com-US"
+      ],
+      "device[description]": "iPhone18,1",
+      "device[token]": "FAKE_PUSH_TOKEN",
+      "device[client_version]": "1001.125.2",
+      "device[development]": "0"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/vnd.api+json; charset=utf-8",
+      "etag": "W/\"7be21c8da964f69c4c65066bb6280c94\""
+    },
+    "body": {
+      "data": {
+        "id": "65794426",
+        "type": "user_device_apples",
+        "attributes": {
+          "token": "FAKE_PUSH_TOKEN",
+          "description": "iPhone18,1",
+          "client_version": "1001.125.2",
+          "voip_token": "FAKE_VOIP_TOKEN",
+          "locales": [
+            "en-US"
+          ],
+          "development": false,
+          "graphql_id": "prod-user_device_apple-65794426",
+          "call_notification_push_type": "voip"
+        },
+        "relationships": {
+          "user": {
+            "data": {
+              "id": "563494348",
+              "type": "users"
+            }
+          }
+        }
+      }
+    }
+  }
+}

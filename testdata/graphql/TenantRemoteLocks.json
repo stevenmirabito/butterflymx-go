@@ -1,0 +1,54 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantRemoteLocks",
+      "query": "query TenantRemoteLocks($ids: [ID!]!, $after: String) { nodes(ids: $ids) { __typename id ... on Tenant { remoteLocks(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...RemoteLockFragment } } } } }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment RemoteLockFragment on RemoteLock { __typename id name legacyDeviceId capabilities atUnitDoors }",
+      "variables": {
+        "ids": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"7d382c56009068676df849f6b7305e25\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "remoteLocks": {
+              "__typename": "RemoteLockConnection",
+              "pageInfo": {
+                "__typename": "PageInfo",
+                "hasNextPage": false,
+                "endCursor": null
+              },
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

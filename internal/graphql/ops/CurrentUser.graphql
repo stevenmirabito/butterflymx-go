@@ -1,0 +1,3 @@
+query CurrentUser { currentUser { __typename ...UserFragment } }
+fragment UserFragment on User { __typename id firstName lastName email phoneNumber avatarUrl hasDormakabaSmartLock contactPreference twoFactorAuthenticationConfig { __typename ...UserMultiFactorAuthenticationConfigFragment } acknowledgedPrivacyPolicyVersion }
+fragment UserMultiFactorAuthenticationConfigFragment on UserMultiFactorAuthenticationConfig { __typename enabled required types }

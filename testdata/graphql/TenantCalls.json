@@ -1,0 +1,336 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantCalls",
+      "query": "query TenantCalls($tenantIds: [ID!]!, $after: String) { nodes(ids: $tenantIds) { __typename id ... on Tenant { calls(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...TenantCallFragment } } } } }\nfragment DeviceFragment on Device { __typename ...NodeFragment name }\nfragment NodeFragment on Node { __typename id }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment TenantCallFragment on Call { __typename id guid loggedAt imageUrl notificationType displayStatus device { __typename ...DeviceFragment } }",
+      "variables": {
+        "after": "",
+        "tenantIds": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"372d016d51ff0bb5b17fb441f4103af5\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "calls": {
+              "__typename": "CallConnection",
+              "pageInfo": {
+                "__typename": "PageInfo",
+                "hasNextPage": true,
+                "endCursor": "MjA"
+              },
+              "nodes": [
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-491476629",
+                  "guid": "b8c5424b-0196-4862-b4a4-bef989a26419",
+                  "loggedAt": "2026-11-06T00:20:27Z",
+                  "imageUrl": "https://example.com/images/18.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-387058193",
+                  "guid": "6b6d9077-0ff8-4242-9a18-e981afdc99e7",
+                  "loggedAt": "2026-11-06T00:08:44Z",
+                  "imageUrl": "https://example.com/images/19.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-117172229",
+                  "guid": "5516c818-9d45-457d-bedb-bf964f9619a3",
+                  "loggedAt": "2026-10-28T03:31:19Z",
+                  "imageUrl": "https://example.com/images/20.jpg",
+                  "notificationType": "DELIVERY",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-541559100",
+                  "guid": "42a87111-3892-4476-9db2-017ee31fef6f",
+                  "loggedAt": "2026-10-24T16:47:34Z",
+                  "imageUrl": "https://example.com/images/21.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-558179824",
+                  "guid": "205108fa-e332-4178-8e93-180796b749fd",
+                  "loggedAt": "2026-10-19T23:10:13Z",
+                  "imageUrl": "https://example.com/images/22.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-585572541",
+                  "guid": "a297263f-1a62-4b60-bb63-0c757ef4e04e",
+                  "loggedAt": "2026-09-26T17:14:50Z",
+                  "imageUrl": "https://example.com/images/23.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-888491409",
+                  "guid": "ec480c9c-74ec-4f90-939c-3611faa2a3f9",
+                  "loggedAt": "2026-09-08T13:56:31Z",
+                  "imageUrl": "https://example.com/images/24.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "CANCELED",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-892482853",
+                  "guid": "5ebd6992-a36a-4672-b651-8e59a54aeba5",
+                  "loggedAt": "2026-08-31T02:49:47Z",
+                  "imageUrl": "https://example.com/images/25.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "CONNECTING_SIP",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-329181641",
+                  "guid": "bdc9e0af-44c7-45d2-b707-c6e3dd85e04f",
+                  "loggedAt": "2026-08-30T22:36:00Z",
+                  "imageUrl": "https://example.com/images/26.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "CONNECTED",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-143075119",
+                  "guid": "bdc9e0af-44c7-45d2-b707-c6e3dd85e04f",
+                  "loggedAt": "2026-08-30T22:35:24Z",
+                  "imageUrl": "https://example.com/images/27.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "TIMEOUT_ONLINE_SIGNAL",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-626253489",
+                  "guid": "5007c6f7-840d-4a91-a9e5-9df45ba8a923",
+                  "loggedAt": "2026-08-29T21:21:14Z",
+                  "imageUrl": "https://example.com/images/28.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-959218934",
+                  "guid": "ac433a17-a928-4166-96f2-bb4fd9761906",
+                  "loggedAt": "2026-08-24T05:45:05Z",
+                  "imageUrl": "https://example.com/images/29.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "CONNECTING_SIP",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-766283613",
+                  "guid": "2744553e-0dcf-4e8d-8106-e69811dc1c2c",
+                  "loggedAt": "2026-08-23T20:05:50Z",
+                  "imageUrl": "https://example.com/images/30.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "CONNECTED",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-976273616",
+                  "guid": "2744553e-0dcf-4e8d-8106-e69811dc1c2c",
+                  "loggedAt": "2026-08-23T20:05:14Z",
+                  "imageUrl": "https://example.com/images/31.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "TIMEOUT_ONLINE_SIGNAL",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-487868455",
+                  "guid": "7eae7571-c232-41ee-b4b4-9ab55cf91930",
+                  "loggedAt": "2026-08-22T01:33:07Z",
+                  "imageUrl": "https://example.com/images/32.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-930252281",
+                  "guid": "7da3c361-8940-4ec5-b2e8-d0a4c62a39cf",
+                  "loggedAt": "2026-08-15T01:31:43Z",
+                  "imageUrl": "https://example.com/images/33.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-543609811",
+                  "guid": "0372548e-290d-4fb3-b2a9-52e1b0b1277d",
+                  "loggedAt": "2026-08-09T04:34:24Z",
+                  "imageUrl": "https://example.com/images/34.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-820281675",
+                  "guid": "5908fd26-e04d-4dd1-a002-1c9332c1f189",
+                  "loggedAt": "2026-08-09T00:50:08Z",
+                  "imageUrl": "https://example.com/images/35.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-365693551",
+                  "guid": "8d38cfc1-0581-49b1-a519-ea92091df196",
+                  "loggedAt": "2026-07-18T02:52:19Z",
+                  "imageUrl": "https://example.com/images/36.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "Call",
+                  "id": "prod-call-214114953",
+                  "guid": "5bedafa6-24c1-4941-ac41-cc05e602be67",
+                  "loggedAt": "2026-06-26T20:07:47Z",
+                  "imageUrl": "https://example.com/images/37.jpg",
+                  "notificationType": "VISITOR",
+                  "displayStatus": "OPENED_DOOR",
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

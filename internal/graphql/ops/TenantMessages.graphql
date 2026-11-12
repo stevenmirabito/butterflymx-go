@@ -1,0 +1,3 @@
+query TenantMessages($tenantIds: [ID!]!, $imageSize: String = "thumb", $after: String) { nodes(ids: $tenantIds) { __typename id ... on Tenant { messages(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ... on TextMessage { ...TenantMessageFragment } } } } } }
+fragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }
+fragment TenantMessageFragment on TextMessage { __typename id title body createdAt logoUrl(size: $imageSize) imageUrl(size: $imageSize) origin source { __typename ... on Device { name } } }

@@ -1,0 +1,24 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/sessions/two_factor_authentication",
+    "query": {},
+    "headers": {
+      "accept": "text/vnd.turbo-stream.html, text/html, application/xhtml+xml",
+      "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+      "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1"
+    },
+    "body": {
+      "type": "authenticator_app",
+      "commit": "Use code"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/vnd.turbo-stream.html; charset=utf-8",
+      "etag": "W/\"2703088845f2dec4eb57d2b07a8e3b58\""
+    },
+    "body": "<turbo-stream location=\"/oauth/authorize?client_id=0e3aeeb7cec2782b9fb21352a4349a44405ed5d7674072416b6481d51abfd6b6&amp;code_challenge=d0p9E9bquI-vy0vXoHe2ObrGSElRvWn7xKIZFkdRzpg&amp;code_challenge_method=S256&amp;nonce=eBAr6iHXQIZezvBK6gPFf9H2z4C1km-tLhkL4f_v5BO&amp;redirect_uri=com.butterflymx.oauth%3A%2F%2Foauth&amp;response_type=code&amp;scope=openid+profile&amp;state=f-QhZXtJgBBMu8JabPhj7KKJ96AGB6uv-F-C3nR9Axb\" action=\"redirect_to\"><template></template></turbo-stream>"
+  }
+}

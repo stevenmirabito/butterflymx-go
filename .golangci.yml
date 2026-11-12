@@ -1,0 +1,11 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - noctx
+    - misspell
+    - unconvert
+    - usestdlibvars

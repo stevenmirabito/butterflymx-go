@@ -1,0 +1,83 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v3/keychains/15387693",
+    "query": {
+      "include": "virtual_keys"
+    },
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/vnd.api+json; charset=utf-8",
+      "etag": "W/\"9c217f735dd1b8a4bb882558fb2e5e13\""
+    },
+    "body": {
+      "data": {
+        "id": "15387693",
+        "type": "keychains",
+        "attributes": {
+          "name": "Guest One",
+          "weekdays": [],
+          "starts_at": "2026-11-01T23:15:00Z",
+          "ends_at": "2027-11-01T06:59:00Z",
+          "time_from": "15:15",
+          "time_to": "23:59",
+          "kind": "custom",
+          "start_date": "2026-11-01",
+          "end_date": "2027-10-31",
+          "allow_unit_access": false
+        },
+        "relationships": {
+          "virtual_keys": {
+            "data": [
+              {
+                "id": "99130956",
+                "type": "virtual_keys"
+              }
+            ]
+          },
+          "devices": {
+            "data": [
+              {
+                "id": "38211",
+                "type": "panels"
+              }
+            ]
+          }
+        }
+      },
+      "included": [
+        {
+          "id": "99130956",
+          "type": "virtual_keys",
+          "attributes": {
+            "name": "Guest One",
+            "qr_code_image_url": "https://s3.dualstack.us-east-1.amazonaws.com/bmx-rails-production/system/qr_keys/qr_code_images/099/130/956/original/qr_code_20261101-1-245i75.png",
+            "email": null,
+            "sms_number": "+15555550101",
+            "used_at": null,
+            "one_time_key_used_at": null,
+            "pin": "246801",
+            "instructions_url": "https://user.butterflymx.com/public/virtual_keys/99130956/6c1f91c9954b29c16b7f558bf9328098",
+            "sent_at": "2026-11-01T23:15:00Z",
+            "synced_with_remote_lock": false
+          },
+          "relationships": {
+            "door_releases": {
+              "data": []
+            },
+            "vehicle": {
+              "data": null
+            }
+          }
+        }
+      ]
+    }
+  }
+}

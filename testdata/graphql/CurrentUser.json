@@ -1,0 +1,56 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "CurrentUser",
+      "query": "query CurrentUser { currentUser { __typename ...UserFragment } }\nfragment UserFragment on User { __typename id firstName lastName email phoneNumber avatarUrl hasDormakabaSmartLock contactPreference twoFactorAuthenticationConfig { __typename ...UserMultiFactorAuthenticationConfigFragment } acknowledgedPrivacyPolicyVersion }\nfragment UserMultiFactorAuthenticationConfigFragment on UserMultiFactorAuthenticationConfig { __typename enabled required types }"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"ad2760d1c5e9f5d1c95b2e0b3dd48bb5\""
+    },
+    "body": {
+      "data": {
+        "currentUser": {
+          "__typename": "User",
+          "id": "prod-user-563494348",
+          "firstName": "Resident",
+          "lastName": "Example",
+          "email": "resident@example.com",
+          "phoneNumber": "5555550100",
+          "avatarUrl": "https://example.com/avatar.jpg",
+          "hasDormakabaSmartLock": false,
+          "contactPreference": "VIDEO_CALL",
+          "twoFactorAuthenticationConfig": {
+            "__typename": "UserMultiFactorAuthenticationConfig",
+            "enabled": true,
+            "required": false,
+            "types": [
+              "EMAIL",
+              "SMS",
+              "AUTHENTICATOR_APP"
+            ]
+          },
+          "acknowledgedPrivacyPolicyVersion": "2026-01-23"
+        }
+      }
+    }
+  }
+}

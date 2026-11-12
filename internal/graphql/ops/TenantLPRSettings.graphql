@@ -1,0 +1,1 @@
+query TenantLPRSettings($ids: [ID!]!) { nodes(ids: $ids) { __typename id ... on Tenant { vehicleAccessToolLimit vehicleAccessToolsEnabled vehicleVisitorPassesEnabled } } }

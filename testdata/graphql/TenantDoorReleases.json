@@ -1,0 +1,436 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/denizen/v1/graphql",
+    "query": {},
+    "headers": {
+      "content-type": "application/json",
+      "accept": "multipart/mixed;deferSpec=20220824,application/graphql-response+json,application/json",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0",
+      "x-bmx-service": "denizen-api"
+    },
+    "body": {
+      "extensions": {
+        "clientLibrary": {
+          "name": "apollo-ios",
+          "version": "2.4.0"
+        }
+      },
+      "operationName": "TenantDoorReleases",
+      "query": "query TenantDoorReleases($tenantIds: [ID!]!, $after: String) { nodes(ids: $tenantIds) { __typename id ... on Tenant { doorReleases(after: $after) { __typename pageInfo { __typename ...PageInfoFragment } nodes { __typename ...TenantDoorReleaseFragment } } } } }\nfragment AccessPointNameFragment on AccessPoint { __typename ...NodeFragment name }\nfragment DeviceFragment on Device { __typename ...NodeFragment name }\nfragment NodeFragment on Node { __typename id }\nfragment PageInfoFragment on PageInfo { __typename hasNextPage endCursor }\nfragment TenantDoorReleaseFragment on DoorRelease { __typename id loggedAt imageUrl licensePlate { __typename id number issuer { __typename id name country } } type method accessPoint { __typename ...AccessPointNameFragment } device { __typename ...DeviceFragment } }",
+      "variables": {
+        "after": "",
+        "tenantIds": [
+          "prod-tenant-7754340"
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "etag": "W/\"e2b4000fa890fdbb6df319229948063d\""
+    },
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "__typename": "Tenant",
+            "id": "prod-tenant-7754340",
+            "doorReleases": {
+              "__typename": "DoorReleaseConnection",
+              "pageInfo": {
+                "__typename": "PageInfo",
+                "hasNextPage": true,
+                "endCursor": "eyJvY2N1cnJlZEF0IjoiMjAyNi0xMC0yNVQwNTozNToyNi41OTFaIiwiaWQiOiJmMjI5MDRjYjAyZmY4NDM3ZWQ4YTMxOWIifQ=="
+              },
+              "nodes": [
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-7185152523",
+                  "loggedAt": "2026-11-12T05:01:09Z",
+                  "imageUrl": "https://cdn-user.na.prod.butterflymx.com/vite/assets/no_image-kVY_vEHT.png",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-12921",
+                    "name": "Front Door"
+                  },
+                  "device": {
+                    "__typename": "CloudBasedAccessController",
+                    "id": "prod-cloud_based_access_controller-37363",
+                    "name": "Front Door & Stairwell Door"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-3843067499",
+                  "loggedAt": "2026-11-12T04:00:06Z",
+                  "imageUrl": "https://example.com/images/1.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-8827305885",
+                  "loggedAt": "2026-11-09T05:36:18Z",
+                  "imageUrl": "https://example.com/images/2.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-7838225678",
+                  "loggedAt": "2026-11-09T01:46:38Z",
+                  "imageUrl": "https://cdn-user.na.prod.butterflymx.com/vite/assets/no_image-kVY_vEHT.png",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "RFID",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-61152",
+                    "name": "Side Door"
+                  },
+                  "device": {
+                    "__typename": "CloudBasedAccessController",
+                    "id": "prod-cloud_based_access_controller-28848",
+                    "name": "Side Door"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-7960651029",
+                  "loggedAt": "2026-11-06T00:39:57Z",
+                  "imageUrl": "https://cdn-user.na.prod.butterflymx.com/vite/assets/no_image-kVY_vEHT.png",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "RFID",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-12921",
+                    "name": "Front Door"
+                  },
+                  "device": {
+                    "__typename": "CloudBasedAccessController",
+                    "id": "prod-cloud_based_access_controller-37363",
+                    "name": "Front Door & Stairwell Door"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-9236207940",
+                  "loggedAt": "2026-11-06T00:20:34Z",
+                  "imageUrl": "https://example.com/images/3.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "MOBILE_CALL",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-5690432194",
+                  "loggedAt": "2026-11-06T00:08:50Z",
+                  "imageUrl": "https://example.com/images/4.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "MOBILE_CALL",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-1292348039",
+                  "loggedAt": "2026-11-05T23:53:10Z",
+                  "imageUrl": "https://example.com/images/5.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-2206709934",
+                  "loggedAt": "2026-11-05T21:58:05Z",
+                  "imageUrl": "https://example.com/images/6.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-6325165627",
+                  "loggedAt": "2026-11-04T05:34:31Z",
+                  "imageUrl": "https://example.com/images/7.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "VIRTUAL_KEY_PIN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-5004717223",
+                  "loggedAt": "2026-11-01T06:21:57Z",
+                  "imageUrl": "https://example.com/images/8.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-4865345998",
+                  "loggedAt": "2026-11-01T02:09:50Z",
+                  "imageUrl": "https://example.com/images/9.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-6307596953",
+                  "loggedAt": "2026-10-31T12:01:52Z",
+                  "imageUrl": "https://example.com/images/10.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-2339980678",
+                  "loggedAt": "2026-10-30T23:24:08Z",
+                  "imageUrl": "https://example.com/images/11.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-7365130054",
+                  "loggedAt": "2026-10-29T23:08:28Z",
+                  "imageUrl": "https://example.com/images/12.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-7080441230",
+                  "loggedAt": "2026-10-29T04:21:48Z",
+                  "imageUrl": "https://example.com/images/13.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-2634131246",
+                  "loggedAt": "2026-10-28T03:31:26Z",
+                  "imageUrl": "https://example.com/images/14.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "MOBILE_CALL",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-1118760655",
+                  "loggedAt": "2026-10-26T07:51:50Z",
+                  "imageUrl": "https://example.com/images/15.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-2078988128",
+                  "loggedAt": "2026-10-26T02:27:58Z",
+                  "imageUrl": "https://example.com/images/16.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                },
+                {
+                  "__typename": "DoorRelease",
+                  "id": "prod-door_relase-1805524328",
+                  "loggedAt": "2026-10-25T05:35:26Z",
+                  "imageUrl": "https://example.com/images/17.jpg",
+                  "licensePlate": null,
+                  "type": "VISITOR",
+                  "method": "SWIPE_TO_OPEN",
+                  "accessPoint": {
+                    "__typename": "AccessPoint",
+                    "id": "prod-access_point-28821",
+                    "name": "Main Entrance"
+                  },
+                  "device": {
+                    "__typename": "Intercom",
+                    "id": "prod-intercom-86254",
+                    "name": "Main Entrance"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/v3/keychains/75337466",
+    "query": {},
+    "headers": {
+      "accept": "*/*",
+      "user-agent": "butterflymx/1266 CFNetwork/3896.200.61 Darwin/27.2.0"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 204,
+    "headers": {},
+    "body": null
+  }
+}
