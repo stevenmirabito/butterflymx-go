@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Initial pre-release. The API may change before v1.0.0.
+## [0.1.0] - 2026-11-12
+
+Initial release. The API may change before v1.0.0.
 
 ### Added
 
