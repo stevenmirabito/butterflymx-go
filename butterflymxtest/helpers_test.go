@@ -75,20 +75,35 @@ func wantStatus(t *testing.T, r reply, want int) {
 	}
 }
 
-var (
-	reMeta   = regexp.MustCompile(`<meta content="([^"]+)" name="csrf-token"/>`)
-	reFormTk = regexp.MustCompile(`name="authenticity_token" type="hidden" value="([^"]+)"`)
-	reTurbo  = regexp.MustCompile(`location="([^"]*)"`)
-)
+var reToken = regexp.MustCompile(`name="_csrf_token" value="([^"]+)"`)
 
-func csrfTokens(t *testing.T, body []byte) (meta, form string) {
+// csrfToken is the page's _csrf_token (every form carries the same one).
+func csrfToken(t *testing.T, body []byte) string {
 	t.Helper()
-	m := reMeta.FindSubmatch(body)
-	f := reFormTk.FindSubmatch(body)
-	if m == nil || f == nil {
-		t.Fatalf("page has no csrf tokens:\n%s", body)
+	m := reToken.FindSubmatch(body)
+	if m == nil {
+		t.Fatalf("page has no csrf token:\n%s", body)
 	}
-	return string(m[1]), string(f[1])
+	return string(m[1])
+}
+
+var reHref = regexp.MustCompile(`href="([^"]*)"`)
+
+// appCallback parses the "Returning to app" page's link to the app.
+func appCallback(t *testing.T, r reply) *url.URL {
+	t.Helper()
+	wantStatus(t, r, 200)
+	for _, m := range reHref.FindAllSubmatch(r.Body, -1) {
+		if l := html.UnescapeString(string(m[1])); strings.HasPrefix(l, RedirectURI) {
+			u, err := url.Parse(l)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return u
+		}
+	}
+	t.Fatalf("no link to the app:\n%s", r.Body)
+	return nil
 }
 
 type pkce struct{ verifier, challenge string }
@@ -118,12 +133,18 @@ func formBody(kv ...string) []byte {
 	return []byte(v.Encode())
 }
 
-var formHdr = func(csrf string) map[string]string {
+// formHdr is a browser's plain form post: no CSRF header, the token travels
+// in the body (and the _csrf_token cookie the client's jar holds).
+func formHdr() map[string]string {
 	return map[string]string{
-		"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-		"Accept":       "text/vnd.turbo-stream.html, text/html, application/xhtml+xml",
-		"X-CSRF-Token": csrf,
+		"Content-Type": "application/x-www-form-urlencoded",
+		"Accept":       "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 	}
+}
+
+// loginBody is the login form's post body.
+func loginBody(tok, email, password string) []byte {
+	return formBody("_csrf_token", tok, "return_to", "/oauth/authorize", "email", email, "password", password, "commit", "Sign in with email")
 }
 
 type tokens struct {
@@ -137,8 +158,22 @@ func login(t *testing.T, s *Server) tokens { t.Helper(); return loginClient(t, s
 func loginClient(t *testing.T, s *Server, c *http.Client) tokens {
 	t.Helper()
 	p := newPKCE()
-	state := randToken(16)
+	code := authorizeCode(t, s, c, p, randToken(16))
+	r := do(t, c, "POST", s.URL()+"/oauth/token", formBody(
+		"grant_type", "authorization_code", "code", code, "code_verifier", p.verifier,
+		"redirect_uri", RedirectURI, "client_id", ClientID), map[string]string{"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
+	wantStatus(t, r, 200)
+	raw := r.JSON(t)
+	tk := tokens{Access: raw["access_token"].(string), Refresh: raw["refresh_token"].(string), Raw: raw}
+	tk.API = denizenLogin(t, s, tk.Access)
+	return tk
+}
 
+// authorizeCode drives the sign-in as the app does (authorize, login page,
+// password, TOTP when 2FA is on, the "Returning to app" page) and returns the
+// authorization code from the link to the app.
+func authorizeCode(t *testing.T, s *Server, c *http.Client, p pkce, state string) string {
+	t.Helper()
 	r := do(t, c, "GET", authorizeURL(s.URL(), p, state, true), nil, nil)
 	wantStatus(t, r, 302)
 	if !strings.HasSuffix(r.Header.Get("Location"), "/login/new") {
@@ -146,42 +181,29 @@ func loginClient(t *testing.T, s *Server, c *http.Client) tokens {
 	}
 	r = do(t, c, "GET", s.URL()+"/login/new", nil, nil)
 	wantStatus(t, r, 200)
-	meta, form := csrfTokens(t, r.Body)
-	r = do(t, c, "POST", s.URL()+"/login", formBody("authenticity_token", form, "login[email]", DefaultEmail, "login[password]", DefaultPassword, "commit", "Sign in with email"), formHdr(meta))
-
-	var loc string
-	if s.cfg.mfa {
-		wantStatus(t, r, 303)
-		l := r.Header.Get("Location")
-		if !strings.Contains(l, "/sessions/two_factor_authentication/new?type=authenticator_app") {
-			t.Fatalf("2FA location = %q", l)
-		}
-		r = do(t, c, "GET", l, nil, nil)
-		wantStatus(t, r, 200)
-		meta, form = csrfTokens(t, r.Body)
-		r = do(t, c, "POST", s.URL()+"/sessions/two_factor_authentication",
-			formBody("authenticity_token", form, "type", "authenticator_app", "code", s.CurrentTOTP(), "commit", "Use code"), formHdr(meta))
-	}
-	wantStatus(t, r, 200)
-	m := reTurbo.FindSubmatch(r.Body)
-	if m == nil {
-		t.Fatalf("no turbo-stream location: %s", r.Body)
-	}
-	loc = html.UnescapeString(string(m[1]))
-	r = do(t, c, "GET", s.URL()+loc, nil, nil)
+	r = do(t, c, "POST", s.URL()+"/login", loginBody(csrfToken(t, r.Body), DefaultEmail, DefaultPassword), formHdr())
 	wantStatus(t, r, 302)
-	cb, err := url.Parse(r.Header.Get("Location"))
-	if err != nil || cb.Scheme != "com.butterflymx.oauth" || cb.Query().Get("state") != state {
-		t.Fatalf("callback = %q (%v)", r.Header.Get("Location"), err)
+
+	loc := r.Header.Get("Location")
+	if s.cfg.mfa {
+		if !strings.Contains(loc, "/login/two_factor_authentication/new?type=authenticator_app") {
+			t.Fatalf("2FA location = %q", loc)
+		}
+		r = do(t, c, "GET", s.URL()+loc, nil, nil)
+		wantStatus(t, r, 200)
+		r = do(t, c, "POST", s.URL()+"/login/two_factor_authentication",
+			formBody("_csrf_token", csrfToken(t, r.Body), "type", "authenticator_app", "code", s.CurrentTOTP()), formHdr())
+		wantStatus(t, r, 302)
+		loc = r.Header.Get("Location")
 	}
-	r = do(t, c, "POST", s.URL()+"/oauth/token", formBody(
-		"grant_type", "authorization_code", "code", cb.Query().Get("code"), "code_verifier", p.verifier,
-		"redirect_uri", RedirectURI, "client_id", ClientID), map[string]string{"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
-	wantStatus(t, r, 200)
-	raw := r.JSON(t)
-	tk := tokens{Access: raw["access_token"].(string), Refresh: raw["refresh_token"].(string), Raw: raw}
-	tk.API = denizenLogin(t, s, tk.Access)
-	return tk
+	if !strings.HasPrefix(loc, "/oauth/authorize?") {
+		t.Fatalf("post-login location = %q", loc)
+	}
+	cb := appCallback(t, do(t, c, "GET", s.URL()+loc, nil, nil))
+	if cb.Query().Get("state") != state {
+		t.Fatalf("callback = %q", cb)
+	}
+	return cb.Query().Get("code")
 }
 
 func denizenLogin(t *testing.T, s *Server, oauth string) string {

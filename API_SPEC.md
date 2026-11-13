@@ -95,9 +95,16 @@ The official app uses:
 | PKCE | `S256` (43-char base64url verifier) |
 | Extra authorize params | `nonce=<random>`, `state=<random>`, `prompt=login` |
 
-The accounts site is a Rails application that uses Turbo (Hotwire). Its session
-cookie, `_accounts_session`, is re-issued on responses, so a cookie jar must be
-kept for the whole flow.
+The accounts site was rewritten in 2026. It used to be a Rails application
+with Turbo; it is now a server-rendered Node application with plain HTML forms
+and no scripts involved in signing in. The flow below was captured from
+production on **2026-11-12** (all three second factors; see "Verified and
+unverified" at the end of §3.3). The session cookie, `identity_session`, is
+re-issued on responses, and CSRF uses a double-submit token: the
+`_csrf_token` cookie and the `_csrf_token` field of the posted form must match.
+A cookie jar must be kept for the whole flow. Pages are plain HTML; nothing
+needs JavaScript. There is **no** `csrf-token` meta tag and no `X-CSRF-Token`
+header.
 
 ### 3.2 Login step 1: email and password
 
@@ -107,39 +114,50 @@ kept for the whole flow.
    GET /oauth/authorize?client_id=…&redirect_uri=com.butterflymx.oauth://oauth
        &response_type=code&scope=openid profile&code_challenge=…
        &code_challenge_method=S256&nonce=…&state=…&prompt=login
-   → 302 Location: https://accounts.butterflymx.com/login/new     (sets _accounts_session)
+   → 302 Location: /login/new     (sets identity_session and _csrf_token)
    ```
 
 2. **Login page**: `GET /login/new` → `200 text/html`. Contains:
-   - `<meta name="csrf-token" content="…">`
-   - `<form action="/login" method="post">` with inputs `authenticity_token`
-     (hidden), `login[email]`, `login[password]` and `commit` (value
-     `Sign in with email`)
+   - `<form action="/login" method="post">` with hidden inputs `_csrf_token`
+     and `return_to` (the authorize URL without `prompt=login`), `email`,
+     `password`, and a submit input `commit` (value `Sign in with email`)
    - Alternative SSO forms (`/sso/microsoft`, `/sso/google`), which are out of
      scope.
 
-3. **Submit credentials**
+3. **Submit credentials**: a plain form post, as a browser makes it
 
    ```
    POST /login
-   Content-Type: application/x-www-form-urlencoded;charset=UTF-8
-   Accept: text/vnd.turbo-stream.html, text/html, application/xhtml+xml
-   X-CSRF-Token: <meta csrf-token>
+   Content-Type: application/x-www-form-urlencoded
+   Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
 
-   authenticity_token=<form token>&login[email]=<email>&login[password]=<password>&commit=Sign in with email
+   _csrf_token=<form token>&return_to=<as served>&email=<email>&password=<password>&commit=Sign in with email
    ```
 
    Do **not** follow redirects automatically. Outcomes:
 
    | Response | Meaning |
    |---|---|
-   | `303 Location: /sessions/two_factor_authentication/new?type=<method>` | Password OK and 2FA required → §3.3 |
-   | `200` turbo-stream with `location="/oauth/authorize?…"` | Password OK, no 2FA → step 4 |
-   | HTML containing the login form again, with an error message | Wrong email or password |
+   | `302 Location: /login/two_factor_authentication/new?type=<method>` | Password OK; 2FA with a default method → §3.3 |
+   | `302 Location: /login/two_factor_authentication` | Password OK; 2FA, no default method: the method picker (§3.3) |
+   | `302 Location: /oauth/authorize?…` | Password OK, no 2FA → step 4 (not captured; inferred) |
+   | `303 Location: /login/new`, then `GET /login/new` shows the login form with `Invalid email or password` under the password field | Wrong email or password |
 
-4. **Finish authorization**: `GET {location}` with `&amp;` decoded to `&`
-   → `302 Location: com.butterflymx.oauth://oauth?code=<code>&state=<state>`.
-   Check that `state` matches and take `code`.
+   A redirect back to `/login/new` without that message is not a wrong
+   password (a bad CSRF token also bounces there).
+
+4. **Finish authorization**: `GET {location}` → `200 text/html`, the
+   "Returning to app…" page, which is **not** a redirect:
+
+   ```html
+   <h1>Returning to app…</h1>
+   <a href="com.butterflymx.oauth://oauth?code=<code>&amp;state=<state>">Tap here if nothing happens</a>
+   ```
+
+   (The page is served by `/oauth/authorize` with the signed-in session; the
+   browser or in-app web view opens the link.) Take the link's `href`, check
+   that `state` matches and take `code`. Clients should also accept a plain
+   `302` with that `Location`, as the older server answered.
 
 ### 3.3 Login step 2: two-factor authentication
 
@@ -147,23 +165,31 @@ The account's 2FA configuration can be read later through GraphQL
 `currentUser.twoFactorAuthenticationConfig { enabled required types }`.
 `types` values: `EMAIL`, `SMS`, `AUTHENTICATOR_APP`.
 
-**The server chooses the first method.** `POST /login` redirects to
-`/sessions/two_factor_authentication/new?type=<method>`, where `<method>` is
-one of `authenticator_app`, `sms` and `email`. It is the method used for the
-**last successful login**, so clients must not assume `authenticator_app`.
+**The server may or may not choose the first method.** `POST /login` redirects
+either to `/login/two_factor_authentication/new?type=<method>` (`<method>` is
+one of `authenticator_app`, `sms` and `email`) or to the method picker,
+`/login/two_factor_authentication`, with no default. The captured accounts
+landed on the picker; an earlier capture of one account landed on
+`…/new?type=email`. Clients must handle both and must not assume a method.
 
 All three methods use the same verify form and endpoint; only `type` differs.
 
-1. **Challenge page**: `GET /sessions/two_factor_authentication/new?type=<method>` → `200 text/html`. It contains `<meta name="csrf-token">` and:
+1. **Challenge page**: `GET /login/two_factor_authentication/new?type=<method>` → `200 text/html`:
 
    ```html
-   <form action="/sessions/two_factor_authentication" method="post">
-     <input type="hidden" name="authenticity_token" value="…">
+   <form action="/login/two_factor_authentication" method="post">
+     <input type="hidden" name="_csrf_token" value="…">
      <input type="hidden" name="type" value="authenticator_app|sms|email">
-     <input type="text"   name="code" autocomplete="one-time-code">
-     <input type="submit" name="commit" value="Use code">
+     <input type="text"   name="code" id="code">
+     <input type="submit" value="Use code">          <!-- no name attribute -->
    </form>
-   <a href="/sessions/two_factor_authentication">Verify another way</a>
+   <!-- sms and email only: -->
+   <form action="/login/two_factor_authentication/new?type=<method>" method="post">
+     <input type="hidden" name="_csrf_token" value="…">
+     <input type="hidden" name="context" value="resend">
+     <button type="submit">Resend code</button>
+   </form>
+   <a href="/login/two_factor_authentication">Verify another way</a>
    ```
 
    | Method | Heading | Body text | Resend form |
@@ -172,70 +198,67 @@ All three methods use the same verify form and endpoint; only `type` differs.
    | `sms` | "Verify with text message" | "A 6-digit code has been sent to your phone number `******NNNN`" (last 4 digits shown) | yes |
    | `email` | "Verify with an Email" | "A 6-digit code has been sent to your email" (no address shown) | yes |
 
-   **Loading this page by GET sends the code.** After `POST /login` redirects to
-   `…/new?type=sms` or `type=email`, the `GET` of that page itself texts or
-   emails a code, with no further request. A client that follows the login
-   redirect to an SMS or email challenge has therefore already triggered a code
-   and must not ask for another right away. The authenticator-app page sends
-   nothing.
+   **Loading the challenge page of `sms` or `email` is assumed to send the
+   code**: that is how the older server behaved, and the captured SMS page
+   claims a code "has been sent" right after the picker link was followed, but
+   no delivery was observed. The authenticator-app page sends nothing.
 
-2. **Switching method ("Verify another way")**
-
-   ```
-   GET /sessions/two_factor_authentication                      → 200 html: method picker
-   ```
-
-   The picker has **one form per method**, each a one-button form with its **own**
-   `authenticity_token`. **CSRF tokens are per form**: none of
-   them equals the page's `<meta name="csrf-token">`, and a POST uses the
-   token of the form it submits:
+2. **The method picker** ("Verify another way"): `GET /login/two_factor_authentication` → `200 html`. Unlike the old server it
+   has **links**, not forms, one per method the account has:
 
    ```html
-   <form action="/sessions/two_factor_authentication/new?type=email" method="post">…<input type="hidden" name="authenticity_token" value="…"></form>
-   <form action="/sessions/two_factor_authentication/new?type=sms" method="post">…</form>
-   <form action="/sessions/two_factor_authentication/new?type=authenticator_app" method="post">…</form>
+   <a href="/login/two_factor_authentication/new?type=email&account_id=…">Email …</a>
+   <a href="/login/two_factor_authentication/new?type=sms&account_id=…">Text message …</a>
+   <a href="/login/two_factor_authentication/new?type=authenticator_app&account_id=…">Authenticator app …</a>
    ```
 
-   **Choosing a method sends the code** for `sms` and `email`:
+   **Following a link is the choice**: `GET` it → `200 html`, the challenge page
+   for that method (as above), and for `sms` and `email` it is **assumed** to
+   send the code, as choosing a method did on the old server (not verified: the
+   captures do not show a delivery). An
+   account without an authenticator app, say, simply has no such link.
+
+3. **Resend** (sms and email only) is the form on the challenge page. It is a
+   plain form post (no `X-CSRF-Token`, browser-style `Accept`):
 
    ```
-   POST /sessions/two_factor_authentication/new?type=sms        form: authenticity_token=<token of the sms form>
-   → 200 html: the challenge page (as above) for that method
+   POST /login/two_factor_authentication/new?type=sms     form: _csrf_token=<token>&context=resend
    ```
 
-3. **Resend** (sms and email only) is a form on the challenge page:
+   The response was **not captured**. The client accepts a `200` challenge
+   page or a redirect back to the challenge page.
 
-   ```
-   POST /sessions/two_factor_authentication/new?type=sms        form: authenticity_token=<token of the resend form>&context=resend
-   → 200 html: the challenge page again, with a notice "A code has been sent to your phone number."
-   ```
-
-   **A resend does not invalidate the earlier code**: the first code still
-   works afterwards.
-
-   The picker and resend POSTs are plain form posts: the official app sends
-   **no** `X-CSRF-Token` header and a browser-style `Accept` for them.
+   **A resend does not invalidate the earlier code** on the old server; assumed
+   to still hold.
 
 4. **Submit the code**
 
    ```
-   POST /sessions/two_factor_authentication
-   Content-Type: application/x-www-form-urlencoded;charset=UTF-8
-   Accept: text/vnd.turbo-stream.html, text/html, application/xhtml+xml
-   X-CSRF-Token: <meta csrf-token>
+   POST /login/two_factor_authentication
+   Content-Type: application/x-www-form-urlencoded
+   Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
 
-   authenticity_token=<form token>&type=<method>&code=<6 digits>&commit=Use code
+   _csrf_token=<form token>&type=<method>&code=<6 digits>
    ```
 
    | Response | Meaning |
    |---|---|
-   | `200` turbo-stream: `<turbo-stream location="/oauth/authorize?…(HTML-escaped)…" action="redirect_to"><template></template></turbo-stream>` | Success → §3.2 step 4 |
-   | `422 text/html`: the challenge page re-rendered with "Two factor authentication failed." / "Invalid code, please try again or request a new code." and a **fresh** `authenticity_token` | Wrong code. Retry using the **new** CSRF token. Same for all three methods. |
+   | `302 Location: /oauth/authorize?…` | Success → §3.2 step 4 |
+   | `200 text/html` (the URL stays `/login/two_factor_authentication`): the challenge page re-rendered with "Invalid verification code" under the code field | Wrong code (captured for the authenticator app). The page carries a token; retry with it. |
 
-   The custom Turbo action is `redirect_to`, not the standard `redirect`, so
-   parse the `location` attribute regardless of `action`.
+   The client also treats a `422`, or a redirect back to a challenge page, as a
+   wrong code, and a redirect to `/login/new` as an expired login session.
 
 5. **There is no "remember this device" option**: each login requires 2FA.
+
+**Verified and unverified** (captured 2026-11-12): verified for the three
+methods are the picker landing, the picker links and their `type` values, the
+challenge pages and forms for `authenticator_app` and `sms` and `email`, a
+successful code and the final "Returning to app" page; the wrong-code response
+for the authenticator app; and the wrong-password response. **Not verified:**
+the resend response, the wrong-code responses for `sms` and `email`, a login
+without 2FA, and whether following a picker link for `sms`/`email` sends a code
+(assumed, as the old server did).
 
 ### 3.4 Authorization code exchange
 
@@ -760,7 +783,7 @@ Response type: `user_device_apples` with `graphql_id`
 | `302/303` | accounts | Login flow navigation | Follow manually |
 | `304` | `/v3` GET with `If-None-Match` | Not modified | Use the cached body |
 | `401` | API | API token invalid | Re-run the denizen login (refreshing the OAuth token first if needed), retry once |
-| `422` | accounts 2FA | Wrong code | Retry with the fresh CSRF token |
+| `200` (page re-rendered) | accounts 2FA | Wrong code | Retry with the page's token |
 | `400` | `/v3` | Validation (`errors[].source.pointer` + `detail`) | Surface the details |
 | `404` | `/v3` | Unknown route or resource. Unknown routes return an **HTML** error page, not JSON. | Fail |
 | `5xx` | all | Server error | Retry idempotent requests only |

@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Sign-in works again with the accounts app ButterflyMX deployed in November
+  2026, which replaced the Rails login: `StartLogin` failed with
+  `ErrLoginFlowChanged` ("login form not found"). The flow was captured from
+  production (see `API_SPEC.md` §3):
+  - The login form is posted with `_csrf_token`, `return_to`, `email`,
+    `password` and `commit` as a plain form (no `X-CSRF-Token`, no Turbo).
+  - A wrong password is a `303` back to the login page, which shows
+    "Invalid email or password"; it is still `ErrInvalidCredentials`, and a
+    bounce back without that message is `ErrLoginFlowChanged`.
+  - The two-factor pages moved to `/login/two_factor_authentication`. The
+    method picker is a list of links rather than forms, and following one
+    chooses the method. A wrong code re-renders the challenge page with
+    "Invalid verification code".
+  - When the server has no default method it lands on the picker;
+    `StartLogin` then takes `WithMFAMethod`, or else the authenticator app
+    (which sends nothing), then email, then SMS.
+  - The final authorize hop is a "Returning to app…" page that links to the
+    app, not a redirect; both are accepted.
+- `ErrLoginFlowChanged` messages describe the page by its visible text and
+  form actions instead of the start of its HTML, which was only scripts.
+- Asking for a method the account does not have (`WithMFAMethod`,
+  `SwitchMFAMethod`) returns `ErrMFAMethodUnsupported` when the picker was
+  recognized, not `ErrLoginFlowChanged`.
+- A challenge stays usable after a failed step: the session cookies the server
+  issued are kept on every error of `CompleteLogin` and `ResendMFACode`, and
+  after a failed `SwitchMFAMethod` the form tokens follow the rotated
+  `_csrf_token` cookie (the server double-submits it).
+- Login requests are refused unless scheme and host match the accounts URL
+  (a form action could downgrade to HTTP), and the app redirect is matched
+  by scheme, authority and path instead of by string prefix.
+- Error text of the headless login no longer reflects server text where it is
+  not needed (see "Error text" in the `auth` package documentation):
+  - The OAuth leg (code exchange, region discovery, denizen login) reports
+    operation, status and an allowlisted OAuth error code only; `Error.Description`
+    and `Error.Body` are empty there, and a transport failure names only its class.
+    The original error stays reachable with `errors.Is` and `errors.As`.
+  - Changed-flow errors keep a short excerpt of the page's visible text and its form
+    paths (never markup, scripts, embedded data or text the user does not see, such as
+    templates and hidden elements), with the submitted secrets (also
+    URL-encoded), email addresses, phone numbers, digit runs of five or more and long
+    tokens masked.
+  - Login request failures show the URL without query, userinfo and fragment, and a
+    masked cause; server-supplied method names are echoed only if they are plain
+    identifiers and OAuth error codes only if they are standard ones; `MFAChallenge.UnmarshalBinary` does not quote the
+    state it could not decode.
+  - Outside the headless login, `Regions`, `DenizenLogin` and `Logout` errors scrub
+    the token they were called with (also as a JSON serializer escapes it) and long
+    opaque values before cutting the body; a JSON body that does not decode is not shown.
+
+### Added
+
+- `MFAChallenge.Offered`: the methods the account's method picker offered, so a
+  UI need not offer a method the account lacks. It is nil (unknown) while the
+  server has chosen a default method; it is set when the login lands on the
+  picker and by `SwitchMFAMethod`, also when that fails with
+  `ErrMFAMethodUnsupported`.
+
+### Changed
+
+- `MFAChallenge` blobs are version 3. Challenges from earlier versions (1 and
+  2) are rejected by `UnmarshalBinary`: their sessions were on the old server.
+- `butterflymxtest` emulates the new accounts app (new paths, `identity_session`
+  and double-submit CSRF cookies, picker links, "Returning to app" page).
+  Added `WithMFAPickerLanding`. The recorded Rails login pages were removed
+  from `testdata/accounts`.
+
 ## [0.1.0] - 2026-11-12
 
 Initial release. The API may change before v1.0.0.

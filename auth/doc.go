@@ -38,6 +38,39 @@
 // server and deletes the stored token when the [TokenStore] is a
 // [TokenDeleter] (both built-in stores are).
 //
+// # Error text
+//
+// Errors from the headless login are meant to be logged, so they follow a
+// policy. The threat model is ButterflyMX accidentally putting something
+// private into a page, not a server built to trick the library: pattern
+// matching cannot stop the latter, so nothing relies on it.
+//
+//   - The OAuth leg (code exchange, region discovery, denizen login) reports
+//     only the operation, the HTTP status and an allowlisted OAuth error code
+//     ([Error.Description] and [Error.Body] are empty), and a transport failure
+//     names only its class (timed out, canceled, network error, unexpected
+//     response). The original error stays reachable with errors.Is and
+//     errors.As.
+//   - A page the library does not recognize ([ErrLoginFlowChanged]) is
+//     described by about 300 characters of its visible text and its form
+//     targets (paths only; a malformed action is not shown): that is what
+//     makes a changed flow diagnosable. Markup, scripts, embedded data and
+//     text the user does not see (templates, noscript fallbacks, hidden
+//     elements) are never shown. The submitted email, password and code, URL-escaped forms
+//     of them, email addresses, phone numbers, runs of five or more digits and
+//     long opaque tokens are masked.
+//     Anything else the page shows, such as a name or a masked phone number,
+//     appears: treat these logs as containing provider page text. A call made
+//     after StartLogin (SwitchMFAMethod, ResendMFACode) does not know the email
+//     or password, since the library keeps no password and a challenge must not
+//     hold one; it masks by pattern only.
+//   - [Regions], [DenizenLogin] and [Logout] keep a short body in their errors,
+//     scrubbed of the token they were called with: JSON is decoded and scrubbed
+//     per string; JSON that does not decode (including one cut at the read
+//     limit) is not shown.
+//   - Request failures in the login pages show the URL without query, userinfo
+//     and fragment, and the cause with the same masking.
+//
 // The flow is reverse-engineered from the official iOS app; see API_SPEC.md
 // section 3. This package never stores passwords. It does not import the root
 // butterflymx package; *[Authenticator] satisfies the root TokenProvider

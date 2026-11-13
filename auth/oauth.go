@@ -93,7 +93,9 @@ func postToken(ctx context.Context, cfg Config, op string, form url.Values) (*To
 	var tr tokenResponse
 	jsonErr := json.Unmarshal(body, &tr)
 	if status != http.StatusOK {
-		return nil, status, &Error{Op: op, Status: status, Code: tr.Error, Description: tr.ErrorDesc, Body: truncate(string(body), 200)}
+		return nil, status, &Error{Op: op, Status: status, Code: cleanErrorCode(tr.Error),
+			Description: scrubTo(ctx, tr.ErrorDesc, 200, form.Get("code"), form.Get("code_verifier"), form.Get("refresh_token")),
+			Body:        scrubTo(ctx, string(body), 200, form.Get("code"), form.Get("code_verifier"), form.Get("refresh_token"))}
 	}
 	if jsonErr != nil || tr.AccessToken == "" {
 		return nil, status, &Error{Op: op, Status: status, Description: "malformed token response"}
@@ -160,7 +162,7 @@ func Regions(ctx context.Context, cfg Config, accessToken string) ([]string, err
 		return nil, err
 	}
 	if status != http.StatusOK {
-		return nil, &Error{Op: "regions", Status: status, Body: truncate(string(body), 200)}
+		return nil, &Error{Op: "regions", Status: status, Body: scrubTo(ctx, string(body), 200, accessToken)}
 	}
 	var out struct {
 		Regions []string `json:"regions"`
@@ -194,7 +196,7 @@ func DenizenLogin(ctx context.Context, cfg Config, accessToken string) (string, 
 		return "", err
 	}
 	if status != http.StatusOK {
-		return "", &Error{Op: "denizen login", Status: status, Body: truncate(string(body), 200)}
+		return "", &Error{Op: "denizen login", Status: status, Body: scrubTo(ctx, string(body), 200, accessToken)}
 	}
 	var out struct {
 		Token string `json:"token"`
@@ -220,7 +222,7 @@ func Logout(ctx context.Context, cfg Config, apiToken string) error {
 		return err
 	}
 	if status < 200 || status > 299 {
-		return &Error{Op: "logout", Status: status, Body: truncate(string(body), 200)}
+		return &Error{Op: "logout", Status: status, Body: scrubTo(ctx, string(body), 200, apiToken)}
 	}
 	return nil
 }
@@ -299,14 +301,118 @@ func (f *AuthCodeFlow) Finish(ctx context.Context, s AuthCodeStart, redirectedUR
 	return completeFromCode(ctx, f.cfg, code, s.Verifier)
 }
 
+// authorizationErrors are the error codes of RFC 6749 section 4.1.2.1 and
+// OpenID Connect Core section 3.1.2.6.
+var authorizationErrors = map[string]bool{
+	"invalid_request": true, "unauthorized_client": true, "access_denied": true,
+	"unsupported_response_type": true, "invalid_scope": true, "server_error": true,
+	"temporarily_unavailable": true, "interaction_required": true, "login_required": true,
+	"account_selection_required": true, "consent_required": true, "invalid_request_uri": true,
+	"invalid_request_object": true, "request_not_supported": true, "request_uri_not_supported": true,
+	"registration_not_supported": true,
+}
+
+// scrub removes long opaque values (tokens, codes) from server-supplied text
+// that ends up in an error.
+func scrub(s string) string { return opaqueRun.ReplaceAllString(s, "[redacted]") }
+
+type secretsKey struct{}
+
+// withSecrets returns a context that carries values (a password, an MFA code)
+// that no error built further down may show.
+func withSecrets(ctx context.Context, secrets []string) context.Context {
+	if len(secrets) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, secretsKey{}, secrets)
+}
+
+// scrubTo prepares server-supplied text for an Error: the given secrets, the
+// ones the context carries and opaque values are removed first, then the text
+// is cut to n bytes (cutting first could shorten a secret below what scrub
+// recognizes).
+//
+// A JSON body is decoded first and its string values are scrubbed, so a
+// secret the server escaped ("a\/b" for "a/b", \u002d for "-") is still found.
+// A body that looks like JSON but does not decode is not shown at all (its
+// escapes cannot be undone); any other body is scrubbed as plain text.
+func scrubTo(ctx context.Context, s string, n int, secrets ...string) string {
+	carried, _ := ctx.Value(secretsKey{}).([]string)
+	all := append(secrets[:len(secrets):len(secrets)], carried...)
+	plain := func(t string) string {
+		for _, sec := range all {
+			if sec != "" {
+				t = strings.ReplaceAll(t, sec, "[redacted]")
+			}
+		}
+		return scrub(t)
+	}
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err == nil {
+		if out, err := json.Marshal(mapStrings(v, plain), json.Deterministic(true)); err == nil {
+			s = string(out)
+		} else {
+			return "(unparsable JSON body)"
+		}
+	} else if t := strings.TrimSpace(s); strings.HasPrefix(t, "{") || strings.HasPrefix(t, "[") || strings.HasPrefix(t, `"`) {
+		// JSON that does not decode (duplicate keys, a body cut at the read
+		// limit): its escapes cannot be undone, so a secret in it cannot be
+		// found reliably. Say so instead of showing it.
+		return "(unparsable JSON body)"
+	}
+	return truncate(plain(s), n)
+}
+
+// mapStrings applies f to every string (and object key) inside a decoded JSON value.
+func mapStrings(v any, f func(string) string) any {
+	switch t := v.(type) {
+	case string:
+		return f(t)
+	case []any:
+		for i := range t {
+			t[i] = mapStrings(t[i], f)
+		}
+		return t
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, x := range t {
+			out[f(k)] = mapStrings(x, f)
+		}
+		return out
+	}
+	return v
+}
+
+// tokenErrorCodes are the error codes a token endpoint may return (RFC 6749
+// section 5.2, plus the authorization ones); anything else is not echoed.
+var tokenErrorCodes = func() map[string]bool {
+	m := map[string]bool{"invalid_client": true, "invalid_grant": true, "unsupported_grant_type": true}
+	for k := range authorizationErrors {
+		m[k] = true
+	}
+	return m
+}()
+
+func cleanErrorCode(c string) string {
+	if c == "" || tokenErrorCodes[c] {
+		return c
+	}
+	return "unrecognized"
+}
+
 // codeFromRedirect extracts and validates the code from the final redirect.
 func codeFromRedirect(cfg Config, loc, state string) (string, error) {
 	u, err := url.Parse(loc)
-	if err != nil || !strings.HasPrefix(loc, cfg.RedirectURI) {
+	if err != nil || !cfg.isAppRedirect(loc) {
 		return "", fmt.Errorf("%w: not a redirect to %s", ErrLoginFlowChanged, cfg.RedirectURI)
 	}
 	q := u.Query()
 	if e := q.Get("error"); e != "" {
+		// Only the standard error codes are echoed: the value comes from the
+		// server and could carry anything.
+		if !authorizationErrors[e] {
+			e = "unrecognized error"
+		}
 		return "", fmt.Errorf("auth: authorization failed: %s", e)
 	}
 	if !constEq(q.Get("state"), state) || state == "" {

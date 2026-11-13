@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,12 +21,10 @@ import (
 const (
 	fixtureHost = "https://accounts.butterflymx.com"
 
-	// CSRF values from testdata/accounts.
-	loginMeta, loginForm = "fkv2I8_q5mcTMT77_Cv1ha7hbRctd5iPsnEDHu8A25EXSFbJUN1W38QNctRLtdO9omTWXh6R6wIU0EgBS-YpZH", "zICjYksQtNyHKEdDtEWa-W0aFOvuoRxouW8ZBU2QbdzHHZiW-Wa5q-H8Kd_WsOE8A_SJKP5SrNe62Q09WoxbP1"
-	mfaMeta, mfaForm     = "QPQh--sb2ZDTEkZ_yxsKknONGWDi6DcFMA-xjoL2_poSTmjDVg88ihGWBrlTbf7zDK4rThFBw1vjaPOIbGjPX2", "S0XbjOaW8cOL_bu45DcEKmGPJr8tAIJmOAVUM-pnBiFF5t4PH4JyEpxSV_LClD9NUfhmANRAi_T9vhrIdoQBfE"
-	retryMeta, retryForm = "kQuvTIs0DNgoS1im8j7FLUwazrSAGDvLGDidSo6NSydaGkWlJ4l6M0K3hldYMIOc20zSOrECPyjDGnkUc2z1qS", "54po-KqxG0ODeXMeh9EcW2A7uaZnU5ZsqcE2B1UsKgPv049eOGUGnvrJ5f3XCIDo5ytXlNT3AH6jYOFg75_EWQ"
-
 	testEmail, testPassword, testCode = "resident@example.com", "hunter2-secret", "123456"
+
+	// acctID is the opaque account_id of the picker's links.
+	acctID = "acct-0123456789"
 )
 
 type fixture struct {
@@ -58,10 +55,6 @@ func loadFixture(t testing.TB, name string) *fixture {
 
 // write replays the fixture response, pointing fixture URLs at srvURL.
 func (f *fixture) write(w http.ResponseWriter, srvURL string) {
-	f.writeBody(w, srvURL, nil)
-}
-
-func (f *fixture) writeBody(w http.ResponseWriter, srvURL string, edit func(string) string) {
 	for k, v := range f.Response.Headers {
 		if k == "etag" {
 			continue
@@ -77,14 +70,13 @@ func (f *fixture) writeBody(w http.ResponseWriter, srvURL string, edit func(stri
 		raw, _ := json.Marshal(b)
 		body = string(raw)
 	}
-	if edit != nil {
-		body = edit(body)
-	}
 	w.WriteHeader(f.Response.Status)
 	_, _ = w.Write([]byte(body))
 }
 
-// fake emulates accounts + API on one server.
+// fake emulates accounts + API on one server. The accounts pages follow the
+// structure of the login and two-factor pages captured from production on
+// 2026-11-12 (the Node app that replaced the Rails one).
 type fake struct {
 	t   *testing.T
 	srv *httptest.Server
@@ -94,10 +86,16 @@ type fake struct {
 	query     string // raw authorize query
 	state     string
 	session   int
+	csrf      string // the token of the page served last (form fields and cookie)
+	loginErr  string // one-shot error for the next login page
+	seq       int
 
 	// behaviour switches
-	loginMode     string // "2fa" (default), "turbo", "turbo-redirect", "badcreds", "weird", "redirect"
+	loginMode     string // "2fa" (default), "redirect", "badcreds", "badcreds-200", "bounce", "weird"
 	stateOverride string
+	tokenEcho     string // when set, the code exchange fails with "bad <tokenEcho>" in the description
+	tokenRedirect string // when set, the code exchange answers 307 to this URL
+	regionsEcho   string // when set, region discovery fails with HTTP 500 and this body
 	refreshMode   string // "rotate", "norotate", "invalid_grant"
 	denizenStatus []int  // statuses to return before succeeding
 	denizenDelay  time.Duration
@@ -109,61 +107,26 @@ type fake struct {
 	lastRefreshToken                                           atomic.Value
 
 	// Two-factor emulation.
-	defaultMFA    string // method of the login redirect: "authenticator_app" (default), "sms", "email" or an unknown one
-	pickerMode    string // "" (picker page), "redirect-once", "redirect", "garbage", "no-sms"
-	pickerRedirs  int
-	mfaLog        []string // "GET new type=sms", "GET picker", "POST choose type=email", "POST resend type=sms", "POST verify type=sms"
-	cur           servedPage
-	pickerTokens  map[string]string // method -> token of the picker form served last
-	lastResendRaw string            // raw body of the last resend POST
-	lastChooseRaw string            // raw body of the last picker POST
+	defaultMFA   string // method of the login redirect: "authenticator_app" (default), "sms", "email", "picker" (no default) or an unknown one
+	pickerMode   string // "" (picker page), "redirect-once", "redirect", "garbage", "no-sms", "app-only"
+	wrongMode    string // how a wrong code is answered: "" (200 re-render), "redirect", "422", "login" (session lost)
+	resendMode   string // how the resend form is answered: "" (200 challenge page), "redirect"
+	pickerRedirs int
+	mfaLog       []string // "GET new type=sms", "GET picker", "GET choose type=email", "POST resend type=sms", "POST verify type=sms"
+	cur          servedPage
+	lastResend   string // raw body of the last resend POST
+	lastVerify   string // raw body of the last verify POST
 
-	fxLogin, fxLoginSMS, fxLoginNew, fxToken, fxRegions, fxDenizen *fixture
-	fxMFAPage, fxChoose, fxMFA422s, fxMFAOKs                       map[string]*fixture
-	fxPicker, fxResendSMS                                          *fixture
+	fxToken, fxRegions, fxDenizen *fixture
 }
 
-// servedPage is what the server last rendered for the session: the tokens a
-// following POST must use (CSRF tokens are per form).
+// servedPage is what the server last rendered for the session.
 type servedPage struct {
-	mfaType, meta, verify, resend string
+	mfaType string
 }
-
-var (
-	metaRe  = regexp.MustCompile(`content="([^"]+)" name="csrf-token"`)
-	tokenRe = regexp.MustCompile(`name="authenticity_token" type="hidden" value="([^"]+)"`)
-	pickRe  = regexp.MustCompile(`(?s)<form action="[^"]*\?type=(\w+)" method="post">.*?name="authenticity_token" type="hidden" value="([^"]+)"`)
-	typeRe  = regexp.MustCompile(`id="type" name="type" type="hidden" value="([^"]+)"`)
-)
 
 func newFake(t *testing.T) *fake {
-	f := &fake{t: t, loginMode: "2fa", refreshMode: "rotate", defaultMFA: "authenticator_app", pickerTokens: map[string]string{}}
-	f.fxLogin = loadFixture(t, "accounts/post-login-303.json")
-	f.fxLoginSMS = loadFixture(t, "accounts/post-login-303-to-sms.json")
-	// Challenge pages, wrong-code pages and successes, by method.
-	f.fxMFAPage = map[string]*fixture{
-		"authenticator_app": loadFixture(t, "accounts/get-two-factor-new-200.json"),
-		"sms":               loadFixture(t, "accounts/get-two-factor-new-200-sms.json"),
-		"email":             loadFixture(t, "accounts/post-two-factor-new-200-email.json"),
-	}
-	f.fxMFA422s = map[string]*fixture{
-		"authenticator_app": loadFixture(t, "accounts/post-two-factor-422-wrong-code.json"),
-		"sms":               loadFixture(t, "accounts/post-two-factor-422-wrong-code-sms.json"),
-		"email":             loadFixture(t, "accounts/post-two-factor-422-wrong-code-email.json"),
-	}
-	f.fxMFAOKs = map[string]*fixture{
-		"authenticator_app": loadFixture(t, "accounts/post-two-factor-200-turbo-stream.json"),
-		"sms":               loadFixture(t, "accounts/post-two-factor-200-turbo-stream-sms.json"),
-		"email":             loadFixture(t, "accounts/post-two-factor-200-turbo-stream-email.json"),
-	}
-	f.fxChoose = map[string]*fixture{
-		"authenticator_app": f.fxMFAPage["authenticator_app"],
-		"sms":               loadFixture(t, "accounts/post-two-factor-new-200-sms.json"),
-		"email":             f.fxMFAPage["email"],
-	}
-	f.fxPicker = loadFixture(t, "accounts/get-two-factor-methods-200.json")
-	f.fxResendSMS = loadFixture(t, "accounts/post-two-factor-resend-sms-200.json")
-	f.fxLoginNew = loadFixture(t, "accounts/get-login-new-200.json")
+	f := &fake{t: t, loginMode: "2fa", refreshMode: "rotate", defaultMFA: "authenticator_app"}
 	f.fxToken = loadFixture(t, "accounts/post-oauth-token-200.json")
 	f.fxRegions = loadFixture(t, "accounts/get-api-mobile-regions-200.json")
 	f.fxDenizen = loadFixture(t, "denizen/post-login-200.json")
@@ -171,10 +134,10 @@ func newFake(t *testing.T) *fake {
 	mux.HandleFunc("GET /oauth/authorize", f.authorize)
 	mux.HandleFunc("GET /login/new", f.loginNew)
 	mux.HandleFunc("POST /login", f.postLogin)
-	mux.HandleFunc("GET /sessions/two_factor_authentication/new", f.mfaNew)
-	mux.HandleFunc("GET /sessions/two_factor_authentication", f.mfaPicker)
-	mux.HandleFunc("POST /sessions/two_factor_authentication/new", f.postMFAChoose)
-	mux.HandleFunc("POST /sessions/two_factor_authentication", f.postMFA)
+	mux.HandleFunc("GET /login/two_factor_authentication/new", f.mfaNew)
+	mux.HandleFunc("GET /login/two_factor_authentication", f.mfaPicker)
+	mux.HandleFunc("POST /login/two_factor_authentication/new", f.postMFAResend)
+	mux.HandleFunc("POST /login/two_factor_authentication", f.postMFA)
 	mux.HandleFunc("POST /oauth/token", f.token)
 	mux.HandleFunc("GET /api/mobile/regions", f.regionsH)
 	mux.HandleFunc("POST /denizen/v1/login", f.denizen)
@@ -206,17 +169,28 @@ func (f *fake) fail(w http.ResponseWriter, format string, args ...any) {
 	http.Error(w, msg, http.StatusTeapot)
 }
 
-// rotate issues a fresh session cookie (the real server re-issues it on every response).
-func (f *fake) rotate(w http.ResponseWriter) {
+// rotate issues a fresh session cookie (the real server re-issues it on every
+// response) and, for a rendered page, a fresh CSRF token whose value is also
+// the _csrf_token cookie (double submit). It returns the page's token.
+func (f *fake) rotate(w http.ResponseWriter, page bool) string {
 	f.mu.Lock()
 	f.session++
 	v := "sess" + strconv.Itoa(f.session)
+	if page {
+		f.seq++
+		f.csrf = fmt.Sprintf("%064x", f.seq*7919)
+	}
+	tok := f.csrf
 	f.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "_accounts_session", Value: v, Path: "/", HttpOnly: true})
+	http.SetCookie(w, &http.Cookie{Name: "identity_session", Value: v, Path: "/", HttpOnly: true})
+	if tok != "" {
+		http.SetCookie(w, &http.Cookie{Name: "_csrf_token", Value: tok, Path: "/"})
+	}
+	return tok
 }
 
 func (f *fake) checkSession(w http.ResponseWriter, r *http.Request) bool {
-	c, err := r.Cookie("_accounts_session")
+	c, err := r.Cookie("identity_session")
 	f.mu.Lock()
 	want := "sess" + strconv.Itoa(f.session)
 	f.mu.Unlock()
@@ -243,6 +217,9 @@ func (f *fake) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	for k, v := range want {
 		if q.Get(k) != v {
+			if k == "prompt" && q.Get(k) == "" {
+				continue // the post-login hop drops prompt=login
+			}
 			f.fail(w, "authorize %s=%q, want %q", k, q.Get(k), v)
 			return
 		}
@@ -257,7 +234,7 @@ func (f *fake) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := r.Cookie("authed"); err == nil {
-		// Final step: bounce to the app with code and state.
+		// Final step: the "Returning to app" page, which links to the app.
 		if !f.checkSession(w, r) {
 			return
 		}
@@ -268,203 +245,70 @@ func (f *fake) authorize(w http.ResponseWriter, r *http.Request) {
 			st = f.stateOverride
 		}
 		f.mu.Unlock()
-		w.Header().Set("Location", publicRedirectURI+"?code=AUTHCODE&state="+url.QueryEscape(st))
-		w.WriteHeader(http.StatusFound)
+		f.rotate(w, false)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		link := publicRedirectURI + "?code=AUTHCODE&state=" + url.QueryEscape(st)
+		_, _ = fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>Returning to app…</title></head><body><h1>Returning to app…</h1><p>Returning to the app… <a href="%s">Tap here if nothing happens</a></p></body></html>`, html.EscapeString(link))
 		return
 	}
 	f.mu.Lock()
 	f.challenge, f.query, f.state = q.Get("code_challenge"), r.URL.RawQuery, q.Get("state")
 	f.mu.Unlock()
-	f.rotate(w)
+	f.rotate(w, true)
 	w.Header().Set("Location", "/login/new")
 	w.WriteHeader(http.StatusFound)
+}
+
+// authorizeBack is the Location after a successful sign-in: the authorize
+// query without prompt=login.
+func (f *fake) authorizeBack() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	q, _ := url.ParseQuery(f.query)
+	q.Del("prompt")
+	return "/oauth/authorize?" + q.Encode()
+}
+
+func hiddenIn(name, value string) string {
+	return `<input type="hidden" name="` + name + `" value="` + html.EscapeString(value) + `" />`
+}
+
+func (f *fake) loginHTML(tok, errMsg string) string {
+	pwErr := ""
+	if errMsg != "" {
+		pwErr = `<ul class="select-none text-sm text-red-1">` + html.EscapeString(errMsg) + `</ul>`
+	}
+	return `<!DOCTYPE html><html class="h-full" lang="en"><head><meta charset="utf-8"><title>ButterflyMX - Sign in</title>
+<script nonce="abc">window.dataLayer = window.dataLayer || [];</script></head><body><main><h1>Sign in</h1>
+<form autocomplete="off" novalidate action="/login" method="post">` + hiddenIn("_csrf_token", tok) + hiddenIn("return_to", f.authorizeBack()) + `
+<input type="email" name="email" id="login_email" value="" />
+<input type="password" name="password" id="login_password" /><button type="button" class="toggle-pw"></button>` + pwErr + `
+<a href="/password/new">Forgot password?</a><input type="submit" name="commit" value="Sign in with email" /></form>
+<form method="post" action="/sso/google">` + hiddenIn("_csrf_token", tok) + `<button type="submit">Google</button></form>
+</main></body></html>`
 }
 
 func (f *fake) loginNew(w http.ResponseWriter, r *http.Request) {
 	if !f.checkSession(w, r) || !f.checkUA(w, r) {
 		return
 	}
-	f.rotate(w)
-	f.fxLoginNew.write(w, f.srv.URL)
+	tok := f.rotate(w, true)
+	f.mu.Lock()
+	msg := f.loginErr
+	f.loginErr = ""
+	f.mu.Unlock()
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = fmt.Fprint(w, f.loginHTML(tok, msg))
 }
 
 func (f *fake) markAuthed(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: "authed", Value: "1", Path: "/"})
 }
 
-// checkForm validates the CSRF placement and returns the parsed form.
-func (f *fake) checkForm(w http.ResponseWriter, r *http.Request, meta, form string) bool {
-	if !f.checkSession(w, r) || !f.checkUA(w, r) {
-		return false
-	}
-	if err := r.ParseForm(); err != nil {
-		f.fail(w, "parse form: %v", err)
-		return false
-	}
-	if r.Header.Get("X-CSRF-Token") != meta {
-		f.fail(w, "X-CSRF-Token = %q, want meta token", r.Header.Get("X-CSRF-Token"))
-		return false
-	}
-	if r.PostForm.Get("authenticity_token") != form {
-		f.fail(w, "authenticity_token = %q, want form token", r.PostForm.Get("authenticity_token"))
-		return false
-	}
-	if got := r.Header.Get("Accept"); got != "text/vnd.turbo-stream.html, text/html, application/xhtml+xml" {
-		f.fail(w, "Accept = %q", got)
-		return false
-	}
-	if ct := r.Header.Get("Content-Type"); ct != "application/x-www-form-urlencoded;charset=UTF-8" {
-		f.fail(w, "Content-Type = %q", ct)
-		return false
-	}
-	return true
-}
-
-func (f *fake) turbo(r *http.Request, action string) string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return fmt.Sprintf(`<turbo-stream location="%s" action="%s"><template></template></turbo-stream>`,
-		html.EscapeString("/oauth/authorize?"+f.query), action)
-}
-
-func (f *fake) postLogin(w http.ResponseWriter, r *http.Request) {
-	if !f.checkForm(w, r, loginMeta, loginForm) {
-		return
-	}
-	for k, v := range map[string]string{"login[email]": testEmail, "login[password]": testPassword, "commit": "Sign in with email"} {
-		if r.PostForm.Get(k) != v {
-			f.fail(w, "login field %s = %q", k, r.PostForm.Get(k))
-			return
-		}
-	}
-	f.rotate(w)
-	switch f.loginMode {
-	case "2fa":
-		switch f.defaultMFA {
-		case "authenticator_app":
-			f.fxLogin.write(w, f.srv.URL)
-		case "sms":
-			f.fxLoginSMS.write(w, f.srv.URL)
-		default:
-			w.Header().Set("Location", "/sessions/two_factor_authentication/new?type="+f.defaultMFA)
-			w.WriteHeader(http.StatusSeeOther)
-		}
-	case "turbo", "turbo-redirect":
-		f.markAuthed(w)
-		action := "redirect_to"
-		if f.loginMode == "turbo-redirect" {
-			action = "redirect"
-		}
-		w.Header().Set("Content-Type", "text/vnd.turbo-stream.html; charset=utf-8")
-		_, _ = fmt.Fprint(w, f.turbo(r, action))
-	case "redirect":
-		f.markAuthed(w)
-		w.Header().Set("Location", "/oauth/authorize?"+f.query)
-		w.WriteHeader(http.StatusSeeOther)
-	case "badcreds":
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		_, _ = fmt.Fprint(w, f.fxLoginNew.Response.Body.(string))
-	case "weird":
-		_, _ = fmt.Fprintf(w, "<html><body><h1>Please solve this CAPTCHA %s %s</h1></body></html>", testEmail, testPassword)
-	}
-}
-
-func (f *fake) logf(format string, args ...any) {
-	f.mu.Lock()
-	f.mfaLog = append(f.mfaLog, fmt.Sprintf(format, args...))
-	f.mu.Unlock()
-}
-
-// log returns a copy of the recorded two-factor requests.
-func (f *fake) log() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]string(nil), f.mfaLog...)
-}
-
-// serveChallenge renders a challenge page and remembers its per-form tokens.
-func (f *fake) serveChallenge(w http.ResponseWriter, fx *fixture, status int) {
-	body, _ := fx.Response.Body.(string)
-	body = strings.ReplaceAll(body, fixtureHost, f.srv.URL)
-	cur := servedPage{}
-	if m := metaRe.FindStringSubmatch(body); m != nil {
-		cur.meta = m[1]
-	}
-	if m := typeRe.FindStringSubmatch(body); m != nil {
-		cur.mfaType = m[1]
-	}
-	tokens := tokenRe.FindAllStringSubmatch(body, -1)
-	if len(tokens) > 0 {
-		cur.verify = tokens[0][1]
-	}
-	if len(tokens) > 1 {
-		cur.resend = tokens[1][1]
-	}
-	f.mu.Lock()
-	f.cur = cur
-	f.mu.Unlock()
-	f.rotate(w)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(body))
-}
-
-func (f *fake) mfaNew(w http.ResponseWriter, r *http.Request) {
-	if !f.checkSession(w, r) || !f.checkUA(w, r) {
-		return
-	}
-	typ := r.URL.Query().Get("type")
-	f.logf("GET new type=%s", typ)
-	fx := f.fxMFAPage[typ]
-	if fx == nil {
-		f.fail(w, "type = %q", typ)
-		return
-	}
-	f.serveChallenge(w, fx, http.StatusOK)
-}
-
-func (f *fake) mfaPicker(w http.ResponseWriter, r *http.Request) {
-	if !f.checkSession(w, r) || !f.checkUA(w, r) {
-		return
-	}
-	f.logf("GET picker")
-	f.mu.Lock()
-	mode := f.pickerMode
-	if mode == "redirect-once" && f.pickerRedirs == 0 {
-		f.pickerRedirs++
-		mode = "redirect"
-	}
-	f.mu.Unlock()
-	switch mode {
-	case "redirect":
-		f.rotate(w)
-		w.Header().Set("Location", "/login/new")
-		w.WriteHeader(http.StatusFound)
-		return
-	case "garbage":
-		f.rotate(w)
-		_, _ = fmt.Fprint(w, "<html><body><h1>Maintenance</h1></body></html>")
-		return
-	}
-	body := f.fxPicker.Response.Body.(string)
-	if mode == "no-sms" {
-		a := strings.Index(body, `<form action="/sessions/two_factor_authentication/new?type=sms"`)
-		b := a + strings.Index(body[a:], "</form>") + len("</form>")
-		body = body[:a] + body[b:]
-	}
-	f.mu.Lock()
-	f.pickerTokens = map[string]string{}
-	for _, m := range pickRe.FindAllStringSubmatch(body, -1) {
-		f.pickerTokens[m[1]] = m[2]
-	}
-	f.mu.Unlock()
-	f.rotate(w)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprint(w, body)
-}
-
-// checkPlainPost validates a plain form post: no X-CSRF-Token, browser Accept.
-func (f *fake) checkPlainPost(w http.ResponseWriter, r *http.Request) bool {
+// checkPost validates a plain form post as the browser makes it: session
+// cookie, web user agent, browser Accept, urlencoded body, no X-CSRF-Token
+// header, and the form's _csrf_token equal to the page token and the cookie.
+func (f *fake) checkPost(w http.ResponseWriter, r *http.Request) bool {
 	if !f.checkSession(w, r) || !f.checkUA(w, r) {
 		return false
 	}
@@ -484,80 +328,258 @@ func (f *fake) checkPlainPost(w http.ResponseWriter, r *http.Request) bool {
 		f.fail(w, "Content-Type = %q", ct)
 		return false
 	}
+	f.mu.Lock()
+	want := f.csrf
+	f.mu.Unlock()
+	c, err := r.Cookie("_csrf_token")
+	if want == "" || r.PostForm.Get("_csrf_token") != want || err != nil || c.Value != want {
+		f.fail(w, "csrf: form %q cookie %v, want the page token %q", r.PostForm.Get("_csrf_token"), c, want)
+		return false
+	}
 	return true
 }
 
-// postMFAChoose handles both the picker choice and "Resend code".
-func (f *fake) postMFAChoose(w http.ResponseWriter, r *http.Request) {
-	if !f.checkPlainPost(w, r) {
+func (f *fake) postLogin(w http.ResponseWriter, r *http.Request) {
+	if !f.checkPost(w, r) {
+		return
+	}
+	for k, v := range map[string]string{"email": testEmail, "password": testPassword, "commit": "Sign in with email"} {
+		if r.PostForm.Get(k) != v {
+			f.fail(w, "login field %s = %q", k, r.PostForm.Get(k))
+			return
+		}
+	}
+	if !strings.HasPrefix(r.PostForm.Get("return_to"), "/oauth/authorize?") {
+		f.fail(w, "return_to = %q", r.PostForm.Get("return_to"))
+		return
+	}
+	if _, ok := r.PostForm["login[email]"]; ok {
+		f.fail(w, "old login[email] field sent")
+		return
+	}
+	f.rotate(w, false)
+	switch f.loginMode {
+	case "2fa":
+		switch f.defaultMFA {
+		case "picker":
+			w.Header().Set("Location", "/login/two_factor_authentication")
+		default:
+			w.Header().Set("Location", "/login/two_factor_authentication/new?type="+f.defaultMFA)
+		}
+		w.WriteHeader(http.StatusFound)
+	case "redirect":
+		f.markAuthed(w)
+		w.Header().Set("Location", f.authorizeBack())
+		w.WriteHeader(http.StatusFound)
+	case "badcreds":
+		f.mu.Lock()
+		f.loginErr = "Invalid email or password"
+		f.mu.Unlock()
+		w.Header().Set("Location", "/login/new")
+		w.WriteHeader(http.StatusSeeOther)
+	case "bounce":
+		w.Header().Set("Location", "/login/new")
+		w.WriteHeader(http.StatusSeeOther)
+	case "badcreds-200":
+		tok := f.rotate(w, true)
+		_, _ = fmt.Fprint(w, f.loginHTML(tok, "Invalid email or password"))
+	case "weird":
+		_, _ = fmt.Fprintf(w, "<html><body><h1>Please solve this CAPTCHA %s %s</h1></body></html>", testEmail, testPassword)
+	}
+}
+
+func (f *fake) logf(format string, args ...any) {
+	f.mu.Lock()
+	f.mfaLog = append(f.mfaLog, fmt.Sprintf(format, args...))
+	f.mu.Unlock()
+}
+
+// log returns a copy of the recorded two-factor requests.
+func (f *fake) log() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.mfaLog...)
+}
+
+// challengeHTML renders the challenge page of typ with a fresh CSRF token.
+func (f *fake) challengeHTML(w http.ResponseWriter, typ, errMsg string) string {
+	tok := f.rotate(w, true)
+	f.mu.Lock()
+	f.cur = servedPage{mfaType: typ}
+	f.mu.Unlock()
+	hint := "Enter the verification code the authenticator app provides"
+	switch typ {
+	case "sms":
+		hint = "A 6-digit code has been sent to your phone number ******0100"
+	case "email":
+		hint = "A 6-digit code has been sent to your email"
+	}
+	fieldErr := ""
+	if errMsg != "" {
+		fieldErr = `<ul class="text-red-1">` + html.EscapeString(errMsg) + `</ul>`
+	}
+	resend := ""
+	if typ != "authenticator_app" {
+		resend = `<form method="post" action="/login/two_factor_authentication/new?type=` + typ + `">` +
+			hiddenIn("_csrf_token", tok) + hiddenIn("context", "resend") + `<button type="submit">Resend code</button></form>`
+	}
+	return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ButterflyMX - Verify with ` + typ + `</title></head><body><main>
+<h1>Verify</h1><h2>` + hint + `</h2>
+<form action="/login/two_factor_authentication" method="post">` + hiddenIn("_csrf_token", tok) + hiddenIn("type", typ) + `
+<input type="text" name="code" id="code" />` + fieldErr + `<input type="submit" value="Use code" /></form>` + resend + `
+<a href="/login/two_factor_authentication">Verify another way</a></main></body></html>`
+}
+
+func (f *fake) serveChallenge(w http.ResponseWriter, typ, errMsg string, status int) {
+	body := f.challengeHTML(w, typ, errMsg)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(body))
+}
+
+func (f *fake) mfaNew(w http.ResponseWriter, r *http.Request) {
+	if !f.checkSession(w, r) || !f.checkUA(w, r) {
 		return
 	}
 	typ := r.URL.Query().Get("type")
-	token := r.PostForm.Get("authenticity_token")
-	f.mu.Lock()
-	cur, want := f.cur, f.pickerTokens[typ]
-	f.mu.Unlock()
-	if r.PostForm.Get("context") == "resend" {
-		f.logf("POST resend type=%s", typ)
-		f.mu.Lock()
-		f.lastResendRaw = r.PostForm.Encode()
-		f.mu.Unlock()
-		if token != cur.resend || cur.resend == "" {
-			f.fail(w, "resend token = %q, want the resend form's %q", token, cur.resend)
+	if r.URL.Query().Get("account_id") != "" {
+		if r.URL.Query().Get("account_id") != acctID {
+			f.fail(w, "account_id = %q", r.URL.Query().Get("account_id"))
 			return
 		}
-		if cur.mfaType != typ {
-			f.fail(w, "resend for %q while the page is for %q", typ, cur.mfaType)
-			return
-		}
-		if typ == "sms" {
-			f.serveChallenge(w, f.fxResendSMS, http.StatusOK)
-			return
-		}
-		f.serveChallenge(w, f.fxMFAPage[typ], http.StatusOK)
-		return
+		f.logf("GET choose type=%s", typ)
+	} else {
+		f.logf("GET new type=%s", typ)
 	}
-	f.logf("POST choose type=%s", typ)
-	f.mu.Lock()
-	f.lastChooseRaw = r.PostForm.Encode()
-	f.mu.Unlock()
-	if token != want || want == "" {
-		f.fail(w, "picker token for %s = %q, want that form's own %q", typ, token, want)
-		return
-	}
-	if len(r.PostForm) != 1 {
-		f.fail(w, "picker form has extra fields: %v", r.PostForm)
-		return
-	}
-	fx := f.fxChoose[typ]
-	if fx == nil {
+	switch typ {
+	case "authenticator_app", "sms", "email":
+		f.serveChallenge(w, typ, "", http.StatusOK)
+	default:
 		f.fail(w, "type = %q", typ)
+	}
+}
+
+func (f *fake) mfaPicker(w http.ResponseWriter, r *http.Request) {
+	if !f.checkSession(w, r) || !f.checkUA(w, r) {
 		return
 	}
-	f.serveChallenge(w, fx, http.StatusOK)
+	f.logf("GET picker")
+	f.mu.Lock()
+	mode := f.pickerMode
+	if mode == "redirect-once" && f.pickerRedirs == 0 {
+		f.pickerRedirs++
+		mode = "redirect"
+	}
+	f.mu.Unlock()
+	switch mode {
+	case "redirect":
+		f.rotate(w, false)
+		w.Header().Set("Location", "/login/new")
+		w.WriteHeader(http.StatusFound)
+		return
+	case "garbage":
+		f.rotate(w, false)
+		_, _ = fmt.Fprint(w, "<html><body><h1>Maintenance</h1></body></html>")
+		return
+	}
+	methods := []string{"email", "sms", "authenticator_app"}
+	switch mode {
+	case "no-sms":
+		methods = []string{"email", "authenticator_app"}
+	case "app-only":
+		methods = []string{"authenticator_app"}
+	case "sms-email":
+		methods = []string{"email", "sms"}
+	case "unknown-only":
+		methods = []string{"webauthn"}
+	case "echo":
+		f.rotate(w, false)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, "<html><body>Error for %s, ref 12345678, code %s</body></html>", testEmail, testCode)
+		return
+	}
+	var links strings.Builder
+	for _, m := range methods {
+		fmt.Fprintf(&links, `<a href="/login/two_factor_authentication/new?type=%s&amp;account_id=%s"><h3>%s</h3></a>`, m, acctID, m)
+	}
+	f.rotate(w, true)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>ButterflyMX - How do you want to verify your account?</title></head><body>
+<h1>How do you want to verify your account?</h1>%s<a href="mailto:support@butterflymx.com">support</a></body></html>`, links.String())
+}
+
+// postMFAResend handles "Resend code".
+func (f *fake) postMFAResend(w http.ResponseWriter, r *http.Request) {
+	if !f.checkPost(w, r) {
+		return
+	}
+	typ := r.URL.Query().Get("type")
+	f.logf("POST resend type=%s", typ)
+	f.mu.Lock()
+	f.lastResend = r.PostForm.Encode()
+	cur := f.cur
+	f.mu.Unlock()
+	if r.PostForm.Get("context") != "resend" {
+		f.fail(w, "resend context = %q", r.PostForm.Get("context"))
+		return
+	}
+	if cur.mfaType != typ {
+		f.fail(w, "resend for %q while the page is for %q", typ, cur.mfaType)
+		return
+	}
+	if f.resendMode == "maintenance" {
+		f.rotate(w, false)
+		_, _ = fmt.Fprint(w, "<html><body><h1>Maintenance</h1></body></html>")
+		return
+	}
+	if f.resendMode == "redirect" {
+		f.rotate(w, false)
+		w.Header().Set("Location", "/login/two_factor_authentication/new?type="+typ)
+		w.WriteHeader(http.StatusFound)
+		return
+	}
+	f.serveChallenge(w, typ, "", http.StatusOK)
 }
 
 func (f *fake) postMFA(w http.ResponseWriter, r *http.Request) {
-	_ = r.ParseForm()
-	f.mu.Lock()
-	cur := f.cur
-	f.mu.Unlock()
-	f.logf("POST verify type=%s", r.PostForm.Get("type"))
-	if !f.checkForm(w, r, cur.meta, cur.verify) {
+	if !f.checkPost(w, r) {
 		return
 	}
 	typ := r.PostForm.Get("type")
-	if typ != cur.mfaType || r.PostForm.Get("commit") != "Use code" {
+	f.logf("POST verify type=%s", typ)
+	f.mu.Lock()
+	cur := f.cur
+	f.lastVerify = r.PostForm.Encode()
+	f.mu.Unlock()
+	if typ != cur.mfaType {
 		f.fail(w, "mfa fields: %v (page is for %q)", r.PostForm, cur.mfaType)
 		return
 	}
 	if r.PostForm.Get("code") != testCode {
-		f.serveChallenge(w, f.fxMFA422s[typ], http.StatusUnprocessableEntity)
+		switch f.wrongMode {
+		case "redirect":
+			f.rotate(w, false)
+			w.Header().Set("Location", "/login/two_factor_authentication/new?type="+typ)
+			w.WriteHeader(http.StatusFound)
+		case "maintenance":
+			// An unusable page that still replaces the session cookie.
+			f.rotate(w, false)
+			_, _ = fmt.Fprint(w, "<html><body><h1>Maintenance</h1></body></html>")
+		case "login":
+			f.rotate(w, false)
+			w.Header().Set("Location", "/login/new")
+			w.WriteHeader(http.StatusFound)
+		case "422":
+			f.serveChallenge(w, typ, "Invalid verification code", http.StatusUnprocessableEntity)
+		default:
+			f.serveChallenge(w, typ, "Invalid verification code", http.StatusOK)
+		}
 		return
 	}
-	f.rotate(w)
+	f.rotate(w, false)
 	f.markAuthed(w)
-	f.fxMFAOKs[typ].writeBody(w, f.srv.URL, func(string) string { return f.turbo(r, "redirect_to") })
+	w.Header().Set("Location", f.authorizeBack())
+	w.WriteHeader(http.StatusFound)
 }
 
 func (f *fake) token(w http.ResponseWriter, r *http.Request) {
@@ -572,6 +594,17 @@ func (f *fake) token(w http.ResponseWriter, r *http.Request) {
 	switch r.PostForm.Get("grant_type") {
 	case "authorization_code":
 		f.exchanges.Add(1)
+		if f.tokenRedirect != "" {
+			w.Header().Set("Location", f.tokenRedirect)
+			w.WriteHeader(http.StatusTemporaryRedirect)
+			return
+		}
+		if f.tokenEcho != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = fmt.Fprintf(w, `{"error":"invalid_grant","error_description":"bad %s"}`, f.tokenEcho)
+			return
+		}
 		v := r.PostForm.Get("code_verifier")
 		sum := sha256.Sum256([]byte(v))
 		f.mu.Lock()
@@ -606,6 +639,11 @@ func (f *fake) token(w http.ResponseWriter, r *http.Request) {
 
 func (f *fake) regionsH(w http.ResponseWriter, r *http.Request) {
 	f.regions.Add(1)
+	if f.regionsEcho != "" {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprint(w, f.regionsEcho)
+		return
+	}
 	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 		f.fail(w, "regions without bearer")
 		return

@@ -1,6 +1,8 @@
 package butterflymxtest
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
@@ -296,61 +298,21 @@ func (r *replay) step(rel string, o sendOpts, after func(f fixture, got reply)) 
 
 func jsonOf(t *testing.T, r reply) map[string]any { t.Helper(); return r.JSON(t) }
 
-func TestConformanceAccounts(t *testing.T) {
-	s := newTestServer(t, WithClock(func() time.Time { return fixedNow }))
+// TestConformanceOAuth replays the token exchange and region discovery. The
+// login pages are not replayed: the recorded Rails pages are gone (ButterflyMX
+// replaced the accounts app in 2026) and the fake's pages follow the captures
+// described in API_SPEC.md instead.
+func TestConformanceOAuth(t *testing.T) {
+	s := newTestServer(t, WithClock(func() time.Time { return fixedNow }), WithoutMFA())
 	r := &replay{t: t, s: s, c: newClient(), ids: map[string]string{}, tags: map[string]string{}}
-	var meta, form, code string
 
-	r.step("accounts/get-oauth-authorize-302-to-login", sendOpts{}, func(f fixture, got reply) {
-		if !strings.HasSuffix(got.Header.Get("Location"), "/login/new") {
-			t.Errorf("location = %q", got.Header.Get("Location"))
-		}
-	})
-	r.step("accounts/get-login-new-200", sendOpts{}, func(f fixture, got reply) { meta, form = csrfTokens(t, got.Body) })
-	r.step("accounts/post-login-303", sendOpts{
-		merge: true, form: url.Values{"authenticity_token": {form}, "login[password]": {DefaultPassword}},
-		header: map[string]string{"X-CSRF-Token": meta},
-	}, func(f fixture, got reply) {
-		want, _ := url.Parse(f.Response.Headers["location"])
-		have, _ := url.Parse(got.Header.Get("Location"))
-		if want.RequestURI() != have.RequestURI() {
-			t.Errorf("location = %s, want path %s", have.RequestURI(), want.RequestURI())
-		}
-	})
-	r.step("accounts/get-two-factor-new-200", sendOpts{}, func(f fixture, got reply) { meta, form = csrfTokens(t, got.Body) })
+	// The recorded exchange carries its own PKCE verifier: sign in with the
+	// matching challenge to get a code it can redeem.
+	f := loadFixture(t, "accounts/post-oauth-token-200")
+	verifier := formFromFixture(t, f.reqJSON()).Get("code_verifier")
+	sum := sha256.Sum256([]byte(verifier))
+	code := authorizeCode(t, s, newClient(), pkce{verifier, base64.RawURLEncoding.EncodeToString(sum[:])}, "state")
 
-	bad := "000000"
-	for totpValid(s.TOTPSecret(), bad, s.now()) {
-		bad = "999999"
-	}
-	r.step("accounts/post-two-factor-422-wrong-code", sendOpts{
-		merge: true, form: url.Values{"authenticity_token": {form}, "code": {bad}}, header: map[string]string{"X-CSRF-Token": meta},
-	}, func(f fixture, got reply) { meta, form = csrfTokens(t, got.Body) })
-	r.step("accounts/post-two-factor-200-turbo-stream", sendOpts{
-		merge: true, form: url.Values{"authenticity_token": {form}, "code": {s.CurrentTOTP()}}, header: map[string]string{"X-CSRF-Token": meta},
-	}, func(f fixture, got reply) {
-		// With the capture's own authorize query the location is reproduced exactly.
-		var want string
-		if err := json.Unmarshal(f.Response.Body, &want); err != nil {
-			t.Fatal(err)
-		}
-		if string(got.Body) != want {
-			t.Errorf("turbo-stream\n got: %s\nwant: %s", got.Body, want)
-		}
-	})
-	r.step("accounts/get-oauth-authorize-302-to-app", sendOpts{}, func(f fixture, got reply) {
-		loc := got.Header.Get("Location")
-		u, err := url.Parse(loc)
-		if err != nil || u.Scheme != "com.butterflymx.oauth" || u.Host != "oauth" {
-			t.Fatalf("location = %q", loc)
-		}
-		code = u.Query().Get("code")
-		want := f.Response.Headers["location"]
-		wantCode := regexp.MustCompile(`code=[^&]+`).FindString(want)
-		if strings.Replace(loc, "code="+code, wantCode, 1) != want {
-			t.Errorf("location = %q, fixture %q", loc, want)
-		}
-	})
 	r.step("accounts/post-oauth-token-200", sendOpts{merge: true, form: url.Values{"code": {code}}}, func(f fixture, got reply) {
 		body := jsonOf(t, got)
 		if body["scope"] != "openid profile" || body["expires_in"] != float64(86400) || body["token_type"] != "Bearer" {
@@ -366,119 +328,6 @@ func TestConformanceAccounts(t *testing.T) {
 			t.Errorf("regions = %s", got.Body)
 		}
 	})
-}
-
-// mfaReplay holds the page tokens the SMS and email conformance replays carry
-// from one step to the next, like the app does.
-type mfaReplay struct {
-	meta  string
-	forms map[string]string // form action -> authenticity token
-}
-
-func (m *mfaReplay) take(t *testing.T, got reply) { m.meta, m.forms = pageTokens(t, got.Body) }
-
-// post options for the plain picker and resend form posts (no X-CSRF-Token).
-func (m *mfaReplay) choose(action string) sendOpts {
-	return sendOpts{merge: true, form: url.Values{"authenticity_token": {m.forms[action]}}}
-}
-
-// verify options for the verify form: form token in the body, meta token in
-// the header.
-func (m *mfaReplay) verify(code string) sendOpts {
-	return sendOpts{
-		merge: true, form: url.Values{"authenticity_token": {m.forms[pathVerify]}, "code": {code}},
-		header: map[string]string{"X-CSRF-Token": m.meta},
-	}
-}
-
-// loginToTwoFactor replays the authorize redirect, the login page and the
-// password step up to (and including) fixture loginFixture.
-func loginToTwoFactor(t *testing.T, r *replay, loginFixture string) {
-	var meta, form string
-	r.step("accounts/get-oauth-authorize-302-to-login", sendOpts{}, nil)
-	r.step("accounts/get-login-new-200", sendOpts{}, func(f fixture, got reply) { meta, form = csrfTokens(t, got.Body) })
-	r.step(loginFixture, sendOpts{
-		merge: true, form: url.Values{"authenticity_token": {form}, "login[password]": {DefaultPassword}},
-		header: map[string]string{"X-CSRF-Token": meta},
-	}, func(f fixture, got reply) {
-		want, _ := url.Parse(f.Response.Headers["location"])
-		have, _ := url.Parse(got.Header.Get("Location"))
-		if want.RequestURI() != have.RequestURI() {
-			t.Errorf("location = %s, want path %s", have.RequestURI(), want.RequestURI())
-		}
-	})
-}
-
-// sameTurboStream expects the exact turbo-stream of the fixture: with the
-// capture's own authorize query the location is reproduced byte for byte.
-func sameTurboStream(t *testing.T) func(f fixture, got reply) {
-	return func(f fixture, got reply) {
-		var want string
-		if err := json.Unmarshal(f.Response.Body, &want); err != nil {
-			t.Fatal(err)
-		}
-		if string(got.Body) != want {
-			t.Errorf("turbo-stream\n got: %s\nwant: %s", got.Body, want)
-		}
-	}
-}
-
-// TestConformanceAccountsSMS replays the SMS exchanges as one session. The
-// resident's last method must be sms for the login to redirect to it
-// (post-login-303-to-sms), which WithLastMFAMethod stands in for (in the
-// capture it was an earlier SMS login). The challenge page GET sends the
-// first code (the default WithMFASendOnGET(true)), so the wrong-code and
-// success steps need no picker step.
-func TestConformanceAccountsSMS(t *testing.T) {
-	s := newTestServer(t, WithLastMFAMethod("sms"))
-	r := &replay{t: t, s: s, c: newClient(), ids: map[string]string{}, tags: map[string]string{}}
-	var m mfaReplay
-
-	loginToTwoFactor(t, r, "accounts/post-login-303-to-sms")
-	r.step("accounts/get-two-factor-new-200-sms", sendOpts{}, func(f fixture, got reply) { m.take(t, got) })
-	if len(s.MFADeliveries()) != 1 {
-		t.Fatalf("deliveries after the challenge GET = %+v", s.MFADeliveries())
-	}
-	bad := "000000"
-	if s.LastMFACode("sms") == bad {
-		bad = "999999"
-	}
-	r.step("accounts/post-two-factor-422-wrong-code-sms", m.verify(bad), func(f fixture, got reply) { m.take(t, got) })
-	// The resend form posts only its own token, with the capture's browser Accept.
-	r.step("accounts/post-two-factor-resend-sms-200", m.choose(pathSMS), func(f fixture, got reply) { m.take(t, got) })
-	if len(s.MFADeliveries()) != 2 {
-		t.Fatalf("deliveries after the resend = %+v", s.MFADeliveries())
-	}
-	r.step("accounts/post-two-factor-200-turbo-stream-sms", m.verify(s.LastMFACode("sms")), sameTurboStream(t))
-}
-
-// TestConformanceAccountsEmail replays the picker and the email exchanges.
-// The first login redirects to the authenticator page (the default last
-// method, post-login-303); the picker then chooses sms and email, as the
-// capture did (post-two-factor-new-200-sms is the picker's sms choice).
-func TestConformanceAccountsEmail(t *testing.T) {
-	s := newTestServer(t)
-	r := &replay{t: t, s: s, c: newClient(), ids: map[string]string{}, tags: map[string]string{}}
-	var m mfaReplay
-
-	loginToTwoFactor(t, r, "accounts/post-login-303")
-	r.step("accounts/get-two-factor-new-200", sendOpts{}, nil)
-	if len(s.MFADeliveries()) != 0 {
-		t.Fatalf("the authenticator page sent a code: %+v", s.MFADeliveries())
-	}
-	r.step("accounts/get-two-factor-methods-200", sendOpts{}, func(f fixture, got reply) { m.take(t, got) })
-	picker := m
-	r.step("accounts/post-two-factor-new-200-sms", picker.choose(pathSMS), nil)
-	r.step("accounts/post-two-factor-new-200-email", picker.choose(pathEmail), func(f fixture, got reply) { m.take(t, got) })
-	if dl := s.MFADeliveries(); len(dl) != 2 || dl[0].Method != "sms" || dl[1].Method != "email" {
-		t.Fatalf("deliveries after the picker = %+v", dl)
-	}
-	bad := "000000"
-	if s.LastMFACode("email") == bad {
-		bad = "999999"
-	}
-	r.step("accounts/post-two-factor-422-wrong-code-email", m.verify(bad), func(f fixture, got reply) { m.take(t, got) })
-	r.step("accounts/post-two-factor-200-turbo-stream-email", m.verify(s.LastMFACode("email")), sameTurboStream(t))
 }
 
 func TestConformanceAPI(t *testing.T) {

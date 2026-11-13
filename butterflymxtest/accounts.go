@@ -13,17 +13,30 @@ import (
 	"time"
 )
 
-const sessionCookie = "_accounts_session"
+// The accounts app (rewritten by ButterflyMX in 2026) keeps its login session
+// in identity_session and protects forms with a double-submit CSRF token: the
+// _csrf_token cookie and the form's _csrf_token field must match.
+const (
+	sessionCookie = "identity_session"
+	csrfCookie    = "_csrf_token"
+	csrfField     = "_csrf_token"
+)
+
+// errInvalidLogin is the message the login page shows after a failed sign-in.
+const errInvalidLogin = "Invalid email or password"
 
 type session struct {
 	id     string
+	csrf   string     // the double-submit CSRF token (cookie and form field)
 	params url.Values // the pending /oauth/authorize query
 	pwOK   bool       // password accepted, 2FA pending
 	authed bool       // fully authenticated
-	// csrf maps every issued authenticity token to the form it was issued
-	// for (the form's action, or csrfMeta for the page's meta tag).
-	csrf map[string]string
-	mfa  mfaState
+	mfa    mfaState
+
+	// One-shot messages shown by the next render of the page they belong to.
+	loginErr string // login page: error under the password field
+	mfaFlash string // challenge page: notice or error at the top
+	mfaErr   string // challenge page: error under the code field
 }
 
 type authCode struct {
@@ -47,55 +60,33 @@ type apiToken struct {
 func (s *Server) baseURL(r *http.Request) string { return "http://" + r.Host }
 
 // session returns the session for the request's cookie, creating one when
-// create is set and none exists. It (re)issues the cookie like Rails does.
+// create is set and none exists. It (re)issues both cookies.
 func (s *Server) session(w http.ResponseWriter, r *http.Request, create bool) *session {
 	var sess *session
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		sess = s.sessions[c.Value]
 	}
 	if sess == nil && create {
-		sess = &session{id: randToken(48), csrf: map[string]string{}, mfa: newMFAState()}
+		sess = &session{id: randToken(48), csrf: randHex(32), mfa: newMFAState()}
 		s.sessions[sess.id] = sess
 	}
 	if sess != nil {
 		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess.id, Path: "/", HttpOnly: true})
+		http.SetCookie(w, &http.Cookie{Name: csrfCookie, Value: sess.csrf, Path: "/"})
 	}
 	return sess
 }
 
-// csrfMeta is the purpose of the token in the page's csrf-token meta tag.
-const csrfMeta = "meta"
-
-// newCSRF issues a fresh authenticity token for the form with the given
-// action (or csrfMeta). Every form gets its own token, as in the real app.
-func (sess *session) newCSRF(purpose string) string {
-	t := randToken(64)
-	sess.csrf[t] = purpose
-	return t
-}
-
-// formCSRF validates only the authenticity_token form field against the form
-// that posts to action. Plain form posts (method picker, resend) carry no
-// X-CSRF-Token header.
-func (sess *session) formCSRF(r *http.Request, action string) bool {
+// checkCSRF validates a form post: the form's _csrf_token must equal the
+// session's token and the _csrf_token cookie. The app answers 403 when not.
+func (sess *session) checkCSRF(r *http.Request) bool {
 	if sess == nil {
 		return false
 	}
-	f := r.PostFormValue("authenticity_token")
-	p, ok := sess.csrf[f]
-	return f != "" && ok && p == action
-}
-
-// checkCSRF validates both the X-CSRF-Token header (the meta tag's token) and
-// the authenticity_token of the form posting to action. The Rails app answers
-// 422 when they are bad.
-func (sess *session) checkCSRF(r *http.Request, action string) bool {
-	if sess == nil {
-		return false
-	}
-	h := r.Header.Get("X-CSRF-Token")
-	p, ok := sess.csrf[h]
-	return h != "" && ok && p == csrfMeta && sess.formCSRF(r, action)
+	c, err := r.Cookie(csrfCookie)
+	f := r.PostFormValue(csrfField)
+	return err == nil && f != "" && subtle.ConstantTimeCompare([]byte(f), []byte(sess.csrf)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(c.Value), []byte(sess.csrf)) == 1
 }
 
 func writeHTML(w http.ResponseWriter, status int, body string) {
@@ -108,70 +99,85 @@ func writeHTML(w http.ResponseWriter, status int, body string) {
 }
 
 func (s *Server) csrfFailure(w http.ResponseWriter) {
-	writeHTML(w, http.StatusUnprocessableEntity,
-		"<!DOCTYPE html>\n<html><head><title>ButterflyMX - Invalid authenticity token</title></head>"+
-			"<body><h1>Invalid authenticity token</h1></body></html>\n")
+	writeHTML(w, http.StatusForbidden,
+		"<!DOCTYPE html>\n<html><head><title>ButterflyMX - Forbidden</title></head>"+
+			"<body><h1>Invalid CSRF token</h1></body></html>\n")
 }
 
-// page renders an accounts page like the fixtures: csrf-param and csrf-token
-// meta tags, flash messages, a heading and the given inner HTML.
-func page(title, metaToken, flash, h1, h2, inner string) string {
+// page renders an accounts page in the layout of the captured ones: a
+// flash area, a heading and the given inner HTML.
+func (s *Server) page(title, flash, h1, h2, inner, footer string) string {
 	var b strings.Builder
-	b.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n <head>\n  <title>\n   ButterflyMX - " + html.EscapeString(title) + "\n  </title>\n")
-	b.WriteString("  <meta content=\"authenticity_token\" name=\"csrf-param\"/>\n")
-	b.WriteString("  <meta content=\"" + html.EscapeString(metaToken) + "\" name=\"csrf-token\"/>\n </head>\n <body>\n  <div>\n   <h2>\n    Property access made simple\n   </h2>\n  </div>\n  <main>\n   <div id=\"content\">\n")
-	b.WriteString("    <div id=\"flash_messages\">\n")
+	b.WriteString("<!DOCTYPE html>\n<html class=\"h-full\" lang=\"en\">\n <head>\n  <meta charset=\"utf-8\">\n  <title>ButterflyMX - " + html.EscapeString(title) + "</title>\n")
+	b.WriteString("  <meta content=\"ButterflyMX\" name=\"description\">\n </head>\n <body class=\"h-full\">\n  <h2>Property access made simple</h2>\n  <main>\n   <div id=\"content\">\n    <div id=\"flash_messages\">")
 	if flash != "" {
-		b.WriteString("     <div>\n      <div>\n       <div>\n        <div classs=\"text-sm font-semibold\">\n         " + html.EscapeString(flash) + "\n        </div>\n       </div>\n      </div>\n     </div>\n")
+		b.WriteString("<div>" + html.EscapeString(flash) + "</div>")
 	}
-	b.WriteString("    </div>\n    <div>\n     <a href=\"https://butterflymx.com\"></a>\n     <h1>\n      " + html.EscapeString(h1) + "\n     </h1>\n")
+	b.WriteString("</div>\n    <h1>" + html.EscapeString(h1) + "</h1>\n")
 	if h2 != "" {
-		b.WriteString("     <h2>\n      " + html.EscapeString(h2) + "\n     </h2>\n")
+		b.WriteString("    <h2>" + html.EscapeString(h2) + "</h2>\n")
 	}
 	b.WriteString(inner)
-	b.WriteString("     <div>\n      By signing in, you agree with our\n      <a href=\"/terms-and-conditions\" target=\"_top\">Terms and Policies</a>\n     </div>\n")
-	b.WriteString("    </div>\n   </div>\n  </main>\n </body>\n</html>\n")
+	b.WriteString(footer)
+	b.WriteString("    <div>By signing in, you agree with our <a href=\"/terms-and-conditions\">Terms and Policies</a></div>\n")
+	b.WriteString("    <div>©" + fmt.Sprint(s.now().Year()) + " ButterflyMX, Inc.</div>\n   </div>\n  </main>\n </body>\n</html>\n")
 	return b.String()
 }
 
 func hidden(name, value string) string {
-	return `<input name="` + name + `" type="hidden" value="` + html.EscapeString(value) + `"/>`
+	return `<input type="hidden" name="` + name + `" value="` + html.EscapeString(value) + `" />`
 }
 
-func (s *Server) loginPage(sess *session, flash string) string {
-	meta := sess.newCSRF(csrfMeta)
-	form := sess.newCSRF("/login")
-	inner := `     <form accept-charset="UTF-8" action="/login" autocomplete="off" method="post" novalidate="novalidate">
-      ` + hidden("authenticity_token", form) + `
+func (s *Server) loginPage(sess *session, errMsg string) string {
+	pwErr := ""
+	if errMsg != "" {
+		pwErr = `<ul class="text-red-1">` + html.EscapeString(errMsg) + `</ul>`
+	}
+	emailAttr := ` data-error="false"`
+	if errMsg != "" {
+		emailAttr = ` data-error="true"`
+	}
+	inner := `    <form autocomplete="off" novalidate action="/login" method="post">
+     ` + hidden(csrfField, sess.csrf) + `
+     ` + hidden("return_to", authorizeLocation(sess)) + `
+     <div` + emailAttr + `>
       <label for="login_email"><span>Email</span></label>
-      <input autocomplete="email" id="login_email" name="login[email]" placeholder="Enter email here" type="email"/>
-      <label for="login_password"><span>Password</span></label>
-      <input autocomplete="current-password" id="login_password" name="login[password]" placeholder="Enter password here" type="password"/>
-      <a href="/password/new">Forgot password?</a>
-      <a href="/registrations/new">Create an account</a>
-      <input name="commit" type="submit" value="Sign in with email"/>
-     </form>
-     <div id="alternate-login-options">
-      <form action="/sso/microsoft" method="post">
-       <button type="submit">Microsoft</button>
-       ` + hidden("authenticity_token", randToken(64)) + hidden("prompt", "select_account") + `
-      </form>
-      <form action="/sso/google" method="post">
-       <button type="submit">Google</button>
-       ` + hidden("authenticity_token", randToken(64)) + hidden("prompt", "select_account") + `
-      </form>
+      <input placeholder="Enter email here" autocomplete="email" type="email" name="email" id="login_email" value="" />
      </div>
+     <div` + emailAttr + `>
+      <label for="login_password"><span>Password</span></label>
+      <input placeholder="Enter password here" autocomplete="current-password" type="password" name="password" id="login_password" />
+      <button type="button" class="toggle-pw"><span class="sr-only">Toggle password reveal</span></button>
+      ` + pwErr + `
+     </div>
+     <a href="/password/new">Forgot password?</a>
+     <input type="submit" name="commit" value="Sign in with email" class="btn btn-primary" />
+    </form>
+    <div id="alternate-login-options">
+     <form method="post" action="/sso/microsoft">
+      ` + hidden(csrfField, sess.csrf) + `
+      <button class="btn btn-vendored-signin" type="submit">Microsoft</button>
+      ` + hidden("prompt", "select_account") + `
+     </form>
+     <form method="post" action="/sso/google">
+      ` + hidden(csrfField, sess.csrf) + `
+      <button class="btn btn-vendored-signin" type="submit">Google</button>
+     </form>
+    </div>
+    <div>Don't know if you're registered? <a href="/registrations/new">Check here</a></div>
 `
-	return page("Sign in", meta, flash, "Sign in", "", inner)
+	return s.page("Sign in", "", "Sign in", "", inner, "")
 }
 
 func (s *Server) hLoginNew(w http.ResponseWriter, r *http.Request) {
 	sess := s.session(w, r, true)
-	writeHTML(w, http.StatusOK, s.loginPage(sess, ""))
+	msg := sess.loginErr
+	sess.loginErr = ""
+	writeHTML(w, http.StatusOK, s.loginPage(sess, msg))
 }
 
-// authorizeLocation is the (relative) /oauth/authorize URL the turbo-stream
-// redirects to: the pending authorize query without prompt=login.
+// authorizeLocation is the (relative) /oauth/authorize URL the sign-in
+// returns to: the pending authorize query without prompt=login.
 func authorizeLocation(sess *session) string {
 	q := url.Values{}
 	for k, v := range sess.params {
@@ -182,40 +188,44 @@ func authorizeLocation(sess *session) string {
 	return "/oauth/authorize?" + q.Encode()
 }
 
-func turboRedirect(w http.ResponseWriter, location string) {
-	body := fmt.Sprintf(`<turbo-stream location="%s" action="redirect_to"><template></template></turbo-stream>`, html.EscapeString(location))
-	w.Header().Set("ETag", weakETag([]byte(body)))
-	w.Header().Set("Content-Type", "text/vnd.turbo-stream.html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(body))
+// redirect answers with a bare redirect like the accounts app's
+// "Found. Redirecting to …" pages.
+func redirect(w http.ResponseWriter, status int, location string) {
+	w.Header().Set("Location", location)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, "Redirecting to %s", location)
 }
 
 func (s *Server) hLogin(w http.ResponseWriter, r *http.Request) {
 	sess := s.session(w, r, false)
-	if err := r.ParseForm(); err != nil || !sess.checkCSRF(r, "/login") {
+	if err := r.ParseForm(); err != nil || !sess.checkCSRF(r) {
 		s.csrfFailure(w)
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(r.PostFormValue("login[email]")))
-	pw := r.PostFormValue("login[password]")
+	email := strings.ToLower(strings.TrimSpace(r.PostFormValue("email")))
+	pw := r.PostFormValue("password")
 	okEmail := subtle.ConstantTimeCompare([]byte(email), []byte(strings.ToLower(DefaultEmail))) == 1
 	okPW := subtle.ConstantTimeCompare([]byte(pw), []byte(DefaultPassword)) == 1
 	if !okEmail || !okPW {
-		// The real server's status is unverified; the fake renders the form again.
-		writeHTML(w, http.StatusUnprocessableEntity, s.loginPage(sess, "Invalid email or password."))
+		// The login page is shown again (after a redirect) with the error.
+		sess.loginErr = errInvalidLogin
+		redirect(w, http.StatusSeeOther, "/login/new")
 		return
 	}
 	if s.cfg.mfa {
 		sess.pwOK = true
 		sess.authed = false
 		sess.mfa = newMFAState()
-		w.Header().Set("Location", s.baseURL(r)+"/sessions/two_factor_authentication/new?type="+s.lastMFA)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusSeeOther)
+		if s.cfg.mfaLand {
+			redirect(w, http.StatusFound, mfaVerifyPath)
+			return
+		}
+		redirect(w, http.StatusFound, mfaNewPath+"?type="+s.lastMFA)
 		return
 	}
 	sess.pwOK, sess.authed = true, true
-	turboRedirect(w, authorizeLocation(sess))
+	redirect(w, http.StatusFound, authorizeLocation(sess))
 }
 
 func (s *Server) hAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -249,17 +259,19 @@ func (s *Server) hAuthorize(w http.ResponseWriter, r *http.Request) {
 		if st := q.Get("state"); st != "" {
 			out.Set("state", st)
 		}
-		w.Header().Set("Location", RedirectURI+"?"+out.Encode())
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusFound)
+		// The app hand-off is a page with a link, not a redirect: the custom
+		// URL scheme is opened by the browser (or the in-app web view).
+		link := RedirectURI + "?" + out.Encode()
+		writeHTML(w, http.StatusOK, `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Returning to app…</title></head>
+<body><h1>Returning to app…</h1><p>Returning to the app… <a href="`+html.EscapeString(link)+`">Tap here if nothing happens</a></p></body></html>
+`)
 		return
 	}
 	sess.params = q
 	sess.pwOK, sess.authed = false, false
 	sess.mfa = newMFAState()
-	w.Header().Set("Location", s.baseURL(r)+"/login/new")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusFound)
+	redirect(w, http.StatusFound, "/login/new")
 }
 
 // ---- OAuth tokens ---------------------------------------------------------

@@ -65,39 +65,40 @@ func TestSMSLoginWrongCodeResendSuccess(t *testing.T) {
 	}
 	wantLog(t, f, "GET new type=sms")
 
-	// Wrong code: the challenge is refreshed in place with the 422 page's per-form tokens.
-	oldVerify, oldResend := c.csrfForm, c.resendToken
+	// Wrong code: the challenge is refreshed in place from the re-rendered page.
+	oldVerify, oldResend := c.csrf, c.resendToken
 	if _, err := CompleteLogin(ctx, f.cfg(), c, "000000"); !errors.Is(err, ErrInvalidMFACode) {
 		t.Fatalf("err = %v", err)
 	}
 	f.mu.Lock()
-	cur := f.cur
+	page := f.csrf
 	f.mu.Unlock()
-	if c.csrfForm == oldVerify || c.csrfForm != cur.verify || c.csrfMeta != cur.meta {
-		t.Error("verify tokens not refreshed from the 422 page")
+	if c.csrf == oldVerify || c.csrf != page {
+		t.Error("verify token not refreshed from the re-rendered page")
 	}
-	if c.resendToken == oldResend || c.resendToken != cur.resend || cur.resend == "" {
-		t.Error("resend token not refreshed from the 422 page")
+	if c.resendToken == oldResend || c.resendToken != page {
+		t.Error("resend token not refreshed from the re-rendered page")
 	}
 	if c.Destination != "******0100" || c.Method != MFASMS {
 		t.Errorf("challenge = %v", c)
 	}
 
-	// Resend through a marshaled copy: context=resend with the resend form's token, no X-CSRF-Token
-	// (the fake rejects one), and the challenge picks up the new page's tokens.
+	// Resend through a marshaled copy: context=resend with the resend form's
+	// token and no X-CSRF-Token (the fake rejects one); the challenge picks up
+	// the new page's tokens.
 	c = roundTrip(t, c)
 	staleResend := c.resendToken
 	if err := ResendMFACode(ctx, f.cfg(), c); err != nil {
 		t.Fatal(err)
 	}
 	f.mu.Lock()
-	raw := f.lastResendRaw
-	cur = f.cur
+	raw := f.lastResend
+	page = f.csrf
 	f.mu.Unlock()
-	if want := "authenticity_token=" + staleResend + "&context=resend"; raw != want {
+	if want := "_csrf_token=" + staleResend + "&context=resend"; raw != want {
 		t.Errorf("resend body = %q, want %q", raw, want)
 	}
-	if c.csrfForm != cur.verify || c.resendToken != cur.resend || c.resendToken == staleResend {
+	if c.csrf != page || c.resendToken != page || c.resendToken == staleResend {
 		t.Error("challenge not refreshed after resend")
 	}
 
@@ -127,9 +128,9 @@ func TestSwitchMFAMethod(t *testing.T) {
 		resend  bool
 		wantLog []string
 	}{
-		{MFAEmail, "", true, []string{"GET new type=authenticator_app", "GET picker", "POST choose type=email", "POST verify type=email"}},
-		{MFASMS, "******0100", true, []string{"GET new type=authenticator_app", "GET picker", "POST choose type=sms", "POST verify type=sms"}},
-		{MFAAuthenticatorApp, "", false, []string{"GET new type=authenticator_app", "GET picker", "POST choose type=authenticator_app", "POST verify type=authenticator_app"}},
+		{MFAEmail, "", true, []string{"GET new type=authenticator_app", "GET picker", "GET choose type=email", "POST verify type=email"}},
+		{MFASMS, "******0100", true, []string{"GET new type=authenticator_app", "GET picker", "GET choose type=sms", "POST verify type=sms"}},
+		{MFAAuthenticatorApp, "", false, []string{"GET new type=authenticator_app", "GET picker", "GET choose type=authenticator_app", "POST verify type=authenticator_app"}},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.to), func(t *testing.T) {
@@ -140,13 +141,6 @@ func TestSwitchMFAMethod(t *testing.T) {
 			}
 			if err := SwitchMFAMethod(context.Background(), f.cfg(), c, tt.to); err != nil {
 				t.Fatal(err)
-			}
-			f.mu.Lock()
-			pickerTok, raw := f.pickerTokens[string(tt.to)], f.lastChooseRaw
-			f.mu.Unlock()
-			// The chosen form's own token, nothing else (the fake also rejects X-CSRF-Token).
-			if want := "authenticity_token=" + pickerTok; raw != want || pickerTok == "" {
-				t.Errorf("picker body = %q, want %q", raw, want)
 			}
 			if c.Method != tt.to || c.Destination != tt.dest || c.CanResend() != tt.resend || c.mfaType != string(tt.to) {
 				t.Errorf("challenge = %v (type %q, resend %v)", c, c.mfaType, c.CanResend())
@@ -165,7 +159,7 @@ func TestSwitchToCurrentMethodResends(t *testing.T) {
 		t.Fatal(err)
 	}
 	complete(t, f, c)
-	wantLog(t, f, "GET new type=sms", "GET picker", "POST choose type=sms", "POST verify type=sms")
+	wantLog(t, f, "GET new type=sms", "GET picker", "GET choose type=sms", "POST verify type=sms")
 }
 
 func TestWithMFAMethodShortcut(t *testing.T) {
@@ -176,7 +170,7 @@ func TestWithMFAMethodShortcut(t *testing.T) {
 		t.Fatalf("challenge = %v", c)
 	}
 	// The default page is never requested, so it cannot send a text.
-	wantLog(t, f, "GET picker", "POST choose type=email")
+	wantLog(t, f, "GET picker", "GET choose type=email")
 	complete(t, f, c)
 }
 
@@ -189,7 +183,7 @@ func TestWithMFAMethodFallback(t *testing.T) {
 		if c.Method != MFAEmail {
 			t.Fatalf("challenge = %v", c)
 		}
-		wantLog(t, f, "GET picker", "GET new type=sms", "GET picker", "POST choose type=email")
+		wantLog(t, f, "GET picker", "GET new type=sms", "GET picker", "GET choose type=email")
 		complete(t, f, c)
 	})
 	for _, mode := range []string{"redirect", "garbage"} {
@@ -273,24 +267,24 @@ func TestSwitchResendExpired(t *testing.T) {
 	}
 }
 
-func TestPickerWithoutFormIsFlowChanged(t *testing.T) {
+func TestPickerWithoutLinkIsMethodUnsupported(t *testing.T) {
 	f := newFake(t)
 	f.pickerMode = "no-sms"
 	c := start(t, f)
 	before := *c
 	err := SwitchMFAMethod(context.Background(), f.cfg(), c, MFASMS)
-	if !errors.Is(err, ErrLoginFlowChanged) {
+	if !errors.Is(err, ErrMFAMethodUnsupported) || errors.Is(err, ErrLoginFlowChanged) {
 		t.Fatalf("err = %v", err)
 	}
 	f.mu.Lock()
-	for m, tok := range f.pickerTokens {
-		if strings.Contains(err.Error(), tok) {
-			t.Errorf("error leaks the %s picker token: %v", m, err)
-		}
-	}
+	page := f.csrf
 	f.mu.Unlock()
-	if c.Method != before.Method || c.csrfForm != before.csrfForm || c.csrfMeta != before.csrfMeta || c.resendToken != before.resendToken {
+	if c.Method != before.Method || c.mfaType != before.mfaType || c.action != before.action || c.resendAction != before.resendAction {
 		t.Error("challenge changed by a failed switch")
+	}
+	// The failed request rotated the CSRF cookie; the form tokens follow it.
+	if c.csrf != page || (before.resendToken != "" && c.resendToken != page) {
+		t.Error("form tokens do not match the server's current token after a failed switch")
 	}
 	// Other methods are still there.
 	if err := SwitchMFAMethod(context.Background(), f.cfg(), c, MFAEmail); err != nil {
@@ -298,11 +292,11 @@ func TestPickerWithoutFormIsFlowChanged(t *testing.T) {
 	}
 }
 
-func TestWithMFAMethodPickerWithoutFormFailsFast(t *testing.T) {
+func TestWithMFAMethodPickerWithoutLinkFailsFast(t *testing.T) {
 	f := newFake(t)
 	f.pickerMode = "no-sms"
 	_, err := StartLogin(context.Background(), f.cfg(), testEmail, testPassword, WithMFAMethod(MFASMS))
-	if !errors.Is(err, ErrLoginFlowChanged) {
+	if !errors.Is(err, ErrMFAMethodUnsupported) {
 		t.Fatalf("err = %v", err)
 	}
 	// A recognized picker without the method is a real answer, not a reason to fall back.
@@ -317,7 +311,7 @@ func TestChallengeMarshalMidFlow(t *testing.T) {
 			c := start(t, f)
 			c2 := roundTrip(t, c)
 			if c2.Method != c.Method || c2.Destination != c.Destination || !c2.CreatedAt.Equal(c.CreatedAt) ||
-				c2.csrfMeta != c.csrfMeta || c2.csrfForm != c.csrfForm || c2.mfaType != c.mfaType ||
+				c2.csrf != c.csrf || c2.mfaType != c.mfaType ||
 				c2.resendAction != c.resendAction || c2.resendToken != c.resendToken ||
 				c2.verifier != c.verifier || c2.state != c.state || c2.resendToken == "" ||
 				!strings.HasSuffix(c2.resendAction, "/new?type="+m) || c2.resendFields["context"] != "resend" {
@@ -328,41 +322,31 @@ func TestChallengeMarshalMidFlow(t *testing.T) {
 	}
 }
 
-func TestChallengeV1Blob(t *testing.T) {
+func TestChallengeBlobVersion(t *testing.T) {
 	f := newFake(t)
 	c := start(t, f)
 	data, err := c.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(string(data), `"version":3`) {
+		t.Errorf("blob = %s", data)
+	}
+	// Challenges from before the accounts rewrite hold dead sessions: reject.
 	var w challengeWire
 	if err := json.Unmarshal(data, &w); err != nil {
 		t.Fatal(err)
 	}
-	w.Version = 1
-	w.ResendAction, w.ResendToken, w.ResendFields, w.Destination = "", "", nil, ""
-	v1, err := json.Marshal(w)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(v1), "resend") {
-		t.Fatalf("v1 blob has resend fields: %s", v1)
-	}
-	var old MFAChallenge
-	if err := old.UnmarshalBinary(v1); err != nil {
-		t.Fatal(err)
-	}
-	if old.Method != MFAAuthenticatorApp || old.CanResend() {
-		t.Fatalf("challenge = %v", old)
-	}
-	if err := ResendMFACode(context.Background(), f.cfg(), &old); !errors.Is(err, ErrMFAResendUnsupported) {
-		t.Fatalf("err = %v", err)
-	}
-	complete(t, f, &old)
-	// New blobs are version 2.
-	data, _ = (&old).MarshalBinary()
-	if !strings.Contains(string(data), `"version":2`) {
-		t.Errorf("blob = %s", data)
+	for _, v := range []int{1, 2} {
+		w.Version = v
+		old, err := json.Marshal(w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c2 MFAChallenge
+		if err := c2.UnmarshalBinary(old); err == nil {
+			t.Errorf("version %d blob accepted", v)
+		}
 	}
 }
 
@@ -377,14 +361,14 @@ func TestResendWithoutResendFormReselects(t *testing.T) {
 	if c.resendToken == "" {
 		t.Error("resend form not learned")
 	}
-	wantLog(t, f, "GET new type=sms", "GET picker", "POST choose type=sms")
+	wantLog(t, f, "GET new type=sms", "GET picker", "GET choose type=sms")
 }
 
 func TestChallengeDoesNotPrintSecrets(t *testing.T) {
 	f := newFake(t)
 	f.defaultMFA = "sms"
 	c := start(t, f)
-	secrets := []string{c.csrfMeta, c.csrfForm, c.resendToken, c.verifier, c.state, c.cookies[0].Value}
+	secrets := []string{c.csrf, c.resendToken, c.verifier, c.state, c.cookies[0].Value}
 	var sb strings.Builder
 	slog.New(slog.NewTextHandler(&sb, nil)).Info("challenge", "c", c, "v", *c)
 	for _, out := range []string{
@@ -463,4 +447,215 @@ func TestConcurrentLogins(t *testing.T) {
 	}()
 	_, _ = c2.MarshalBinary()
 	<-done
+}
+
+func TestPickerLanding(t *testing.T) {
+	tests := []struct {
+		name    string
+		picker  string
+		opts    []LoginOption
+		want    MFAMethod
+		resend  bool
+		wantLog []string
+	}{
+		// With no default the authenticator app is taken: choosing it sends nothing.
+		{"prefers authenticator app", "", nil, MFAAuthenticatorApp, false, []string{"GET picker", "GET choose type=authenticator_app", "POST verify type=authenticator_app"}},
+		{"explicit method", "", []LoginOption{WithMFAMethod(MFAEmail)}, MFAEmail, true, []string{"GET picker", "GET choose type=email", "POST verify type=email"}},
+		{"explicit sms", "", []LoginOption{WithMFAMethod(MFASMS)}, MFASMS, true, []string{"GET picker", "GET choose type=sms", "POST verify type=sms"}},
+		{"email before sms", "sms-email", nil, MFAEmail, true, []string{"GET picker", "GET choose type=email", "POST verify type=email"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFake(t)
+			f.defaultMFA = "picker"
+			f.pickerMode = tt.picker
+			c := start(t, f, tt.opts...)
+			if c.Method != tt.want || c.CanResend() != tt.resend || c.mfaType != string(tt.want) {
+				t.Fatalf("challenge = %v (type %q)", c, c.mfaType)
+			}
+			complete(t, f, roundTrip(t, c))
+			wantLog(t, f, tt.wantLog...)
+		})
+	}
+	t.Run("method not offered", func(t *testing.T) {
+		f := newFake(t)
+		f.defaultMFA = "picker"
+		f.pickerMode = "app-only"
+		_, err := StartLogin(context.Background(), f.cfg(), testEmail, testPassword, WithMFAMethod(MFAEmail))
+		if !errors.Is(err, ErrMFAMethodUnsupported) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
+
+// A rejected code comes back as a 200 re-render (as captured), a 422 or a
+// redirect to the challenge page; all are a wrong code and leave the challenge
+// usable.
+func TestWrongCodeShapes(t *testing.T) {
+	for _, mode := range []string{"", "422", "redirect"} {
+		t.Run("mode "+mode, func(t *testing.T) {
+			f := newFake(t)
+			f.wrongMode = mode
+			ctx := context.Background()
+			c := start(t, f)
+			old := c.csrf
+			if _, err := CompleteLogin(ctx, f.cfg(), c, "000000"); !errors.Is(err, ErrInvalidMFACode) {
+				t.Fatalf("err = %v", err)
+			}
+			if c.csrf == old {
+				t.Error("tokens not refreshed")
+			}
+			complete(t, f, roundTrip(t, c))
+		})
+	}
+}
+
+func TestResendRedirect(t *testing.T) {
+	f := newFake(t)
+	f.defaultMFA = "email"
+	f.resendMode = "redirect"
+	c := start(t, f)
+	stale := c.resendToken
+	if err := ResendMFACode(context.Background(), f.cfg(), c); err != nil {
+		t.Fatal(err)
+	}
+	if c.resendToken == stale {
+		t.Error("resend token not refreshed from the page behind the redirect")
+	}
+	complete(t, f, c)
+	wantLog(t, f, "GET new type=email", "POST resend type=email", "GET new type=email", "POST verify type=email")
+}
+
+// An expired login session sends the code POST back to the login page.
+func TestVerifyAfterSessionLostIsExpired(t *testing.T) {
+	f := newFake(t)
+	c := start(t, f)
+	f.wrongMode = "login"
+	if _, err := CompleteLogin(context.Background(), f.cfg(), c, "000000"); !errors.Is(err, ErrMFAExpired) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// A switch that fails (the picker has no such method) still gets a response
+// that rotates the CSRF cookie; the original challenge must stay usable after
+// it, also through a marshal round trip.
+func TestFailedSwitchKeepsChallengeUsable(t *testing.T) {
+	f := newFake(t)
+	f.pickerMode = "no-sms"
+	c := start(t, f)
+	if err := SwitchMFAMethod(context.Background(), f.cfg(), c, MFASMS); !errors.Is(err, ErrMFAMethodUnsupported) {
+		t.Fatalf("err = %v", err)
+	}
+	complete(t, f, roundTrip(t, c))
+}
+
+// Responses that cannot be used (a page without the form, say) can still
+// replace the session cookie; a retry after a failed code or resend needs it.
+func TestUnusableResponseKeepsSession(t *testing.T) {
+	t.Run("code", func(t *testing.T) {
+		f := newFake(t)
+		f.wrongMode = "maintenance"
+		c := start(t, f)
+		if _, err := CompleteLogin(context.Background(), f.cfg(), c, "000000"); !errors.Is(err, ErrLoginFlowChanged) {
+			t.Fatalf("err = %v", err)
+		}
+		f.wrongMode = ""
+		complete(t, f, roundTrip(t, c))
+	})
+	t.Run("resend", func(t *testing.T) {
+		f := newFake(t)
+		f.defaultMFA = "email"
+		f.resendMode = "maintenance"
+		c := start(t, f)
+		if err := ResendMFACode(context.Background(), f.cfg(), c); !errors.Is(err, ErrLoginFlowChanged) {
+			t.Fatalf("err = %v", err)
+		}
+		f.resendMode = ""
+		complete(t, f, roundTrip(t, c))
+	})
+}
+
+// A picker that is recognized but offers nothing this library supports is
+// known to offer none: Offered is empty, not nil (unknown), also after a round trip.
+func TestOfferedEmptyIsNotUnknown(t *testing.T) {
+	f := newFake(t)
+	f.pickerMode = "unknown-only"
+	c := start(t, f)
+	if c.Offered != nil {
+		t.Fatalf("Offered = %v before the picker was seen, want nil", c.Offered)
+	}
+	if err := SwitchMFAMethod(context.Background(), f.cfg(), c, MFASMS); !errors.Is(err, ErrMFAMethodUnsupported) {
+		t.Fatalf("err = %v", err)
+	}
+	if c.Offered == nil || len(c.Offered) != 0 {
+		t.Errorf("Offered = %#v, want an empty non-nil slice", c.Offered)
+	}
+	if got := roundTrip(t, c).Offered; got == nil || len(got) != 0 {
+		t.Errorf("Offered after a round trip = %#v, want an empty non-nil slice", got)
+	}
+	// Landing on such a picker is an unsupported-method error, not a changed flow.
+	g := newFake(t)
+	g.defaultMFA = "picker"
+	g.pickerMode = "unknown-only"
+	if _, err := StartLogin(context.Background(), g.cfg(), testEmail, testPassword); !errors.Is(err, ErrMFAMethodUnsupported) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestOfferedMethods(t *testing.T) {
+	t.Run("picker landing", func(t *testing.T) {
+		for picker, want := range map[string][]MFAMethod{
+			"":          {MFAAuthenticatorApp, MFASMS, MFAEmail},
+			"no-sms":    {MFAAuthenticatorApp, MFAEmail},
+			"app-only":  {MFAAuthenticatorApp},
+			"sms-email": {MFASMS, MFAEmail},
+		} {
+			f := newFake(t)
+			f.defaultMFA = "picker"
+			f.pickerMode = picker
+			c := start(t, f)
+			if !slices.Equal(c.Offered, want) {
+				t.Errorf("picker %q: Offered = %v, want %v", picker, c.Offered, want)
+			}
+			if got := roundTrip(t, c).Offered; !slices.Equal(got, want) {
+				t.Errorf("picker %q: Offered after a round trip = %v", picker, got)
+			}
+		}
+	})
+	t.Run("unknown when the server picks a default", func(t *testing.T) {
+		f := newFake(t)
+		c := start(t, f)
+		if c.Offered != nil {
+			t.Errorf("Offered = %v, want nil (unknown)", c.Offered)
+		}
+	})
+	t.Run("after a switch", func(t *testing.T) {
+		f := newFake(t)
+		c := start(t, f)
+		if err := SwitchMFAMethod(context.Background(), f.cfg(), c, MFAEmail); err != nil {
+			t.Fatal(err)
+		}
+		if want := []MFAMethod{MFAAuthenticatorApp, MFASMS, MFAEmail}; !slices.Equal(c.Offered, want) {
+			t.Errorf("Offered = %v, want %v", c.Offered, want)
+		}
+	})
+	t.Run("learned from a switch the account cannot make", func(t *testing.T) {
+		f := newFake(t)
+		f.pickerMode = "no-sms"
+		c := start(t, f)
+		if err := SwitchMFAMethod(context.Background(), f.cfg(), c, MFASMS); !errors.Is(err, ErrMFAMethodUnsupported) {
+			t.Fatalf("err = %v", err)
+		}
+		if want := []MFAMethod{MFAAuthenticatorApp, MFAEmail}; !slices.Equal(c.Offered, want) {
+			t.Errorf("Offered = %v, want %v", c.Offered, want)
+		}
+	})
+	t.Run("with the method shortcut", func(t *testing.T) {
+		f := newFake(t)
+		f.defaultMFA = "sms"
+		c := start(t, f, WithMFAMethod(MFAEmail))
+		if want := []MFAMethod{MFAAuthenticatorApp, MFASMS, MFAEmail}; !slices.Equal(c.Offered, want) {
+			t.Errorf("Offered = %v, want %v", c.Offered, want)
+		}
+	})
 }

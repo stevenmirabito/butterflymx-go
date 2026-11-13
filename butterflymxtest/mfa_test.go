@@ -10,26 +10,26 @@ import (
 	"time"
 )
 
-var (
-	reForm     = regexp.MustCompile(`(?s)<form[^>]*\baction="([^"]*)"[^>]*>(.*?)</form>`)
-	reFormAuth = regexp.MustCompile(`name="authenticity_token" type="hidden" value="([^"]*)"`)
+const (
+	pathVerify = "/login/two_factor_authentication"
+	pathSMS    = "/login/two_factor_authentication/new?type=sms"
+	pathEmail  = "/login/two_factor_authentication/new?type=email"
+	pathApp    = "/login/two_factor_authentication/new?type=authenticator_app"
 )
 
-// pageTokens returns the page's meta token and the token of every form by its
-// (unescaped) action.
-func pageTokens(t testing.TB, body []byte) (meta string, forms map[string]string) {
+// pickerLinks returns the picker's links by method type (unescaped hrefs).
+func pickerLinks(t testing.TB, body []byte) map[string]string {
 	t.Helper()
-	m := reMeta.FindSubmatch(body)
-	if m == nil {
-		t.Fatalf("no csrf-token meta tag:\n%s", body)
-	}
-	forms = map[string]string{}
-	for _, f := range reForm.FindAllStringSubmatch(string(body), -1) {
-		if tk := reFormAuth.FindStringSubmatch(f[2]); tk != nil {
-			forms[html.UnescapeString(f[1])] = tk[1]
+	out := map[string]string{}
+	for _, m := range reHref.FindAllSubmatch(body, -1) {
+		l := html.UnescapeString(string(m[1]))
+		u, err := url.Parse(l)
+		if err != nil || u.Path != "/login/two_factor_authentication/new" {
+			continue
 		}
+		out[u.Query().Get("type")] = l
 	}
-	return string(m[1]), forms
+	return out
 }
 
 // mfaFlow drives the 2FA endpoints like the app does, with plain net/http.
@@ -43,80 +43,83 @@ func newMFAFlow(t *testing.T, opts ...Option) *mfaFlow {
 	return &mfaFlow{t: t, s: newTestServer(t, opts...), c: newClient()}
 }
 
-// login does authorize, the login page and POST /login, and returns the 303
+// login does authorize, the login page and POST /login, and returns the 302
 // Location.
 func (f *mfaFlow) login() string {
 	f.t.Helper()
 	do(f.t, f.c, "GET", authorizeURL(f.s.URL(), newPKCE(), "st", true), nil, nil)
 	r := do(f.t, f.c, "GET", f.s.URL()+"/login/new", nil, nil)
-	meta, form := csrfTokens(f.t, r.Body)
-	r = do(f.t, f.c, "POST", f.s.URL()+"/login", formBody("authenticity_token", form, "login[email]", DefaultEmail,
-		"login[password]", DefaultPassword, "commit", "Sign in with email"), formHdr(meta))
-	wantStatus(f.t, r, 303)
+	r = do(f.t, f.c, "POST", f.s.URL()+"/login", loginBody(csrfToken(f.t, r.Body), DefaultEmail, DefaultPassword), formHdr())
+	wantStatus(f.t, r, 302)
 	return r.Header.Get("Location")
 }
 
+// get requests a path or URL.
 func (f *mfaFlow) get(u string) reply {
 	f.t.Helper()
-	return do(f.t, f.c, "GET", u, nil, map[string]string{"Accept": "text/vnd.turbo-stream.html, text/html, application/xhtml+xml"})
+	if strings.HasPrefix(u, "/") {
+		u = f.s.URL() + u
+	}
+	return do(f.t, f.c, "GET", u, nil, map[string]string{"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"})
 }
 
-// postForm is the plain form post of the picker and the resend form: no
-// X-CSRF-Token header, a browser-style Accept.
+// postForm is a plain form post, as the app makes it for every form.
 func (f *mfaFlow) postForm(action, token string, kv ...string) reply {
 	f.t.Helper()
-	return do(f.t, f.c, "POST", f.s.URL()+action, formBody(append([]string{"authenticity_token", token}, kv...)...),
-		map[string]string{"Content-Type": "application/x-www-form-urlencoded", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"})
+	return do(f.t, f.c, "POST", f.s.URL()+action, formBody(append([]string{"_csrf_token", token}, kv...)...), formHdr())
 }
 
-// verify posts the code like the app: form token in the body, meta token in
-// the header.
-func (f *mfaFlow) verify(method, code, meta, form string) reply {
+func (f *mfaFlow) verify(method, code, token string) reply {
 	f.t.Helper()
-	return do(f.t, f.c, "POST", f.s.URL()+"/sessions/two_factor_authentication",
-		formBody("authenticity_token", form, "type", method, "code", code, "commit", "Use code"), formHdr(meta))
+	return f.postForm(pathVerify, token, "type", method, "code", code)
 }
 
-func wantTurbo(t *testing.T, r reply) {
+// resend posts the resend form and follows the redirect back to the
+// challenge page, returning that page.
+func (f *mfaFlow) resend(path, token string) reply {
+	f.t.Helper()
+	r := f.postForm(path, token, "context", "resend")
+	wantStatus(f.t, r, 302)
+	if got := r.Header.Get("Location"); got != path {
+		f.t.Fatalf("resend location = %q, want %q", got, path)
+	}
+	return f.get(r.Header.Get("Location"))
+}
+
+// wantSuccess checks the redirect back to the authorize endpoint.
+func wantSuccess(t *testing.T, r reply) {
 	t.Helper()
-	wantStatus(t, r, 200)
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "text/vnd.turbo-stream.html") || !strings.Contains(string(r.Body), `action="redirect_to"`) {
-		t.Fatalf("not a redirect_to turbo-stream: %s %s", r.Header.Get("Content-Type"), r.Body)
+	wantStatus(t, r, 302)
+	if loc := r.Header.Get("Location"); !strings.HasPrefix(loc, "/oauth/authorize?") || strings.Contains(loc, "prompt") {
+		t.Fatalf("success location = %q", loc)
 	}
 }
 
-func wantFailedPage(t *testing.T, r reply, method string) {
+// wantWrongCode checks the 200 re-render of the challenge page with the error.
+func wantWrongCode(t *testing.T, r reply, method string) {
 	t.Helper()
-	wantStatus(t, r, 422)
-	for _, want := range []string{"Two factor authentication failed.", "Invalid code, please try again or request a new code.",
-		`name="type" type="hidden" value="` + method + `"`} {
+	wantStatus(t, r, 200)
+	for _, want := range []string{"Invalid verification code", `name="type" value="` + method + `"`, `action="/login/two_factor_authentication"`} {
 		if !strings.Contains(string(r.Body), want) {
-			t.Errorf("422 page lacks %q:\n%s", want, r.Body)
+			t.Errorf("wrong-code page lacks %q:\n%s", want, r.Body)
 		}
 	}
 }
 
-func lastRedirectMethod(t *testing.T, loc string) string {
+func redirectMethod(t *testing.T, loc string) string {
 	t.Helper()
 	u, err := url.Parse(loc)
-	if err != nil || u.Path != "/sessions/two_factor_authentication/new" {
+	if err != nil || u.Path != "/login/two_factor_authentication/new" {
 		t.Fatalf("2FA location = %q", loc)
 	}
 	return u.Query().Get("type")
 }
 
-const (
-	pathVerify = "/sessions/two_factor_authentication"
-	pathSMS    = "/sessions/two_factor_authentication/new?type=sms"
-	pathEmail  = "/sessions/two_factor_authentication/new?type=email"
-	pathApp    = "/sessions/two_factor_authentication/new?type=authenticator_app"
-)
-
 func TestSMSLoginWithWrongCodeAndResend(t *testing.T) {
 	now := fixedNow
 	f := newMFAFlow(t, WithLastMFAMethod("sms"), WithClock(func() time.Time { return now }))
 	loc := f.login()
-	if m := lastRedirectMethod(t, loc); m != "sms" {
+	if m := redirectMethod(t, loc); m != "sms" {
 		t.Fatalf("redirect type = %q, want sms", m)
 	}
 
@@ -124,27 +127,24 @@ func TestSMSLoginWithWrongCodeAndResend(t *testing.T) {
 	wantStatus(t, r, 200)
 	body := string(r.Body)
 	for _, want := range []string{
-		"<title>\n   ButterflyMX - Verify with text message\n  </title>",
+		"<title>ButterflyMX - Verify with text message</title>",
 		"A 6-digit code has been sent to your phone number ******0100",
-		`<form accept-charset="UTF-8" action="/sessions/two_factor_authentication" method="post">`,
-		`<form action="/sessions/two_factor_authentication/new?type=sms" method="post">`,
-		"Resend code", `name="context" type="hidden" value="resend"`,
-		`<a href="/sessions/two_factor_authentication">`, "Verify another way",
-		`autocomplete="one-time-code"`, `name="commit" type="submit" value="Use code"`,
+		`<form action="/login/two_factor_authentication" method="post">`,
+		`<form method="post" action="/login/two_factor_authentication/new?type=sms">`,
+		"Resend code", `name="context" value="resend"`,
+		`<a href="/login/two_factor_authentication">Verify another way</a>`,
+		`autocomplete="one-time-code"`, `value="Use code"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("SMS page lacks %q", want)
 		}
 	}
-	if strings.Contains(body, "Two factor authentication failed.") || strings.Contains(body, "classs=") {
-		t.Error("fresh challenge page must have no flash message")
+	if strings.Contains(body, "Invalid verification code") || strings.Contains(body, "has been sent to your phone number.") {
+		t.Error("fresh challenge page must have no message")
 	}
-	meta, forms := pageTokens(t, r.Body)
-	if len(forms) != 2 || forms[pathVerify] == "" || forms[pathSMS] == "" {
-		t.Fatalf("forms = %v", forms)
-	}
-	if meta == forms[pathVerify] || meta == forms[pathSMS] || forms[pathVerify] == forms[pathSMS] {
-		t.Error("meta, verify and resend tokens must all differ")
+	tok := csrfToken(t, r.Body)
+	if n := strings.Count(body, `name="_csrf_token" value="`+tok+`"`); n != 2 {
+		t.Errorf("the session token appears in %d forms, want 2", n)
 	}
 
 	dl := f.s.MFADeliveries()
@@ -154,25 +154,23 @@ func TestSMSLoginWithWrongCodeAndResend(t *testing.T) {
 	}
 	first := dl[0].Code
 
-	// A wrong code: 422, the page again with fresh tokens.
+	// A wrong code: 200, the page again with the error.
 	wrong := "000000"
 	if wrong == first {
 		wrong = "111111"
 	}
-	r = f.verify("sms", wrong, meta, forms[pathVerify])
-	wantFailedPage(t, r, "sms")
-	meta2, forms2 := pageTokens(t, r.Body)
-	if meta2 == meta || forms2[pathVerify] == forms[pathVerify] || forms2[pathSMS] == forms[pathSMS] {
-		t.Error("expected fresh tokens on the 422 page")
-	}
+	wantWrongCode(t, f.verify("sms", wrong, tok), "sms")
 
-	// Resend: the notice, a second code, and both codes stay valid.
-	r = f.postForm(pathSMS, forms2[pathSMS], "context", "resend")
+	// Resend: a redirect back to the page, which shows the notice once; a
+	// second code, and both stay valid.
+	r = f.resend(pathSMS, tok)
 	wantStatus(t, r, 200)
 	if !strings.Contains(string(r.Body), "A code has been sent to your phone number.") {
 		t.Errorf("resend page lacks the notice:\n%s", r.Body)
 	}
-	meta3, forms3 := pageTokens(t, r.Body)
+	if again := f.get(pathSMS); strings.Contains(string(again.Body), "A code has been sent to your phone number.") {
+		t.Error("the notice must be shown once")
+	}
 	dl = f.s.MFADeliveries()
 	if len(dl) != 2 || !dl[1].Resend || dl[1].Trigger != "resend" || dl[1].Code == first || f.s.LastMFACode("sms") != dl[1].Code {
 		t.Fatalf("deliveries = %+v", dl)
@@ -181,9 +179,8 @@ func TestSMSLoginWithWrongCodeAndResend(t *testing.T) {
 		t.Error("no email was sent")
 	}
 
-	// The first code still works (it is the one we verify with).
-	wantTurbo(t, f.verify("sms", first, meta3, forms3[pathVerify]))
-	// ... and so does the second, in a new login of the same account.
+	// The first code still works.
+	wantSuccess(t, f.verify("sms", first, tok))
 	if f.s.lastMFA != "sms" {
 		t.Errorf("last method = %q", f.s.lastMFA)
 	}
@@ -191,22 +188,20 @@ func TestSMSLoginWithWrongCodeAndResend(t *testing.T) {
 
 func TestAllCodesOfTheSessionStayValid(t *testing.T) {
 	f := newMFAFlow(t, WithLastMFAMethod("sms"))
-	loc := f.login()
-	r := f.get(loc)
-	_, forms := pageTokens(t, r.Body)
-	r = f.postForm(pathSMS, forms[pathSMS], "context", "resend")
-	meta, forms := pageTokens(t, r.Body)
+	r := f.get(f.login())
+	tok := csrfToken(t, r.Body)
+	f.resend(pathSMS, tok)
 	dl := f.s.MFADeliveries()
 	if len(dl) != 2 {
 		t.Fatalf("deliveries = %+v", dl)
 	}
-	wantTurbo(t, f.verify("sms", dl[1].Code, meta, forms[pathVerify]))
+	wantSuccess(t, f.verify("sms", dl[1].Code, tok))
 }
 
 func TestEmailViaPickerFromAuthenticatorDefault(t *testing.T) {
 	f := newMFAFlow(t)
 	loc := f.login()
-	if m := lastRedirectMethod(t, loc); m != "authenticator_app" {
+	if m := redirectMethod(t, loc); m != "authenticator_app" {
 		t.Fatalf("redirect type = %q", m)
 	}
 	wantStatus(t, f.get(loc), 200)
@@ -214,7 +209,7 @@ func TestEmailViaPickerFromAuthenticatorDefault(t *testing.T) {
 		t.Fatal("the authenticator page must not send a code")
 	}
 
-	r := f.get(f.s.URL() + pathVerify)
+	r := f.get(pathVerify)
 	wantStatus(t, r, 200)
 	body := string(r.Body)
 	for _, want := range []string{
@@ -226,41 +221,51 @@ func TestEmailViaPickerFromAuthenticatorDefault(t *testing.T) {
 			t.Errorf("picker lacks %q", want)
 		}
 	}
+	if strings.Contains(body, "<form") {
+		t.Error("the picker is links, not forms")
+	}
 	iE, iS, iA := strings.Index(body, "type=email"), strings.Index(body, "type=sms"), strings.Index(body, "type=authenticator_app")
 	if 0 >= iE || iE >= iS || iS >= iA {
 		t.Errorf("picker order wrong: email %d sms %d app %d", iE, iS, iA)
 	}
-	meta, forms := pageTokens(t, r.Body)
-	if len(forms) != 3 || forms[pathEmail] == forms[pathSMS] || forms[pathSMS] == forms[pathApp] || forms[pathEmail] == forms[pathApp] || meta == forms[pathEmail] {
-		t.Fatalf("picker tokens must be distinct: meta=%s forms=%v", meta, forms)
+	links := pickerLinks(t, r.Body)
+	if len(links) != 3 || !strings.Contains(links["email"], "account_id=") {
+		t.Fatalf("picker links = %v", links)
 	}
 
-	r = f.postForm(pathEmail, forms[pathEmail])
+	// Following the link chooses the method and sends the code.
+	r = f.get(links["email"])
 	wantStatus(t, r, 200)
 	if !strings.Contains(string(r.Body), "A 6-digit code has been sent to your email") || strings.Contains(string(r.Body), "resident@example.com") {
 		t.Errorf("email page:\n%s", r.Body)
 	}
-	if !strings.Contains(string(r.Body), "Verify with an Email") || strings.Contains(string(r.Body), "A code has been sent to your email.") {
-		t.Errorf("email page heading or notice wrong:\n%s", r.Body)
+	if !strings.Contains(string(r.Body), "Verify with an Email") {
+		t.Errorf("email page heading wrong:\n%s", r.Body)
 	}
 	dl := f.s.MFADeliveries()
 	if len(dl) != 1 || dl[0].Method != "email" || dl[0].Destination != "resident@example.com" || dl[0].Trigger != "picker" || dl[0].Resend {
 		t.Fatalf("deliveries = %+v", dl)
 	}
 
-	meta, forms = pageTokens(t, r.Body)
-	r = f.verify("email", "123abc", meta, forms[pathVerify])
-	wantFailedPage(t, r, "email")
-	meta, forms = pageTokens(t, r.Body)
-	wantTurbo(t, f.verify("email", f.s.LastMFACode("email"), meta, forms[pathVerify]))
+	tok := csrfToken(t, r.Body)
+	wantWrongCode(t, f.verify("email", "123abc", tok), "email")
+	wantSuccess(t, f.verify("email", f.s.LastMFACode("email"), tok))
+}
+
+func TestChoosingTheCurrentMethodAgainResends(t *testing.T) {
+	f := newMFAFlow(t, WithLastMFAMethod("sms"))
+	f.get(f.login())
+	links := pickerLinks(t, f.get(pathVerify).Body)
+	f.get(links["sms"])
+	if dl := f.s.MFADeliveries(); len(dl) != 2 || dl[0].Trigger != "challenge-get" || dl[1].Trigger != "picker" {
+		t.Fatalf("deliveries = %+v", dl)
+	}
 }
 
 func TestEmailResendNotice(t *testing.T) {
 	f := newMFAFlow(t, WithLastMFAMethod("email"))
 	r := f.get(f.login())
-	_, forms := pageTokens(t, r.Body)
-	r = f.postForm(pathEmail, forms[pathEmail], "context", "resend")
-	wantStatus(t, r, 200)
+	r = f.resend(pathEmail, csrfToken(t, r.Body))
 	if !strings.Contains(string(r.Body), "A code has been sent to your email.") {
 		t.Errorf("no notice:\n%s", r.Body)
 	}
@@ -272,8 +277,8 @@ func TestEmailResendNotice(t *testing.T) {
 func TestPickerChoosingAuthenticatorSendsNothing(t *testing.T) {
 	f := newMFAFlow(t)
 	f.login()
-	_, forms := pageTokens(t, f.get(f.s.URL()+pathVerify).Body)
-	r := f.postForm(pathApp, forms[pathApp])
+	links := pickerLinks(t, f.get(pathVerify).Body)
+	r := f.get(links["authenticator_app"])
 	wantStatus(t, r, 200)
 	if !strings.Contains(string(r.Body), "Verify with an authenticator app") || strings.Contains(string(r.Body), "Resend code") {
 		t.Errorf("page:\n%s", r.Body)
@@ -282,18 +287,32 @@ func TestPickerChoosingAuthenticatorSendsNothing(t *testing.T) {
 		t.Error("nothing should be sent")
 	}
 	// the authenticator still works, with no code ever sent
-	meta, vforms := pageTokens(t, r.Body)
-	wantTurbo(t, f.verify("authenticator_app", f.s.CurrentTOTP(), meta, vforms[pathVerify]))
+	wantSuccess(t, f.verify("authenticator_app", f.s.CurrentTOTP(), csrfToken(t, r.Body)))
+}
+
+func TestPickerLanding(t *testing.T) {
+	f := newMFAFlow(t, WithMFAPickerLanding())
+	if loc := f.login(); loc != pathVerify {
+		t.Fatalf("login redirects to %q, want the picker", loc)
+	}
+	r := f.get(pathVerify)
+	wantStatus(t, r, 200)
+	if len(f.s.MFADeliveries()) != 0 {
+		t.Fatal("nothing is sent before a method is chosen")
+	}
+	r = f.get(pickerLinks(t, r.Body)["sms"])
+	wantStatus(t, r, 200)
+	wantSuccess(t, f.verify("sms", f.s.LastMFACode("sms"), csrfToken(t, r.Body)))
 }
 
 func TestUnknownMethod(t *testing.T) {
 	f := newMFAFlow(t)
 	f.login()
-	r := f.get(f.s.URL() + "/sessions/two_factor_authentication/new?type=carrier_pigeon")
+	r := f.get("/login/two_factor_authentication/new?type=carrier_pigeon")
 	if r.StatusCode != http.StatusNotFound || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/html") {
 		t.Errorf("status = %d, content type %q", r.StatusCode, r.Header.Get("Content-Type"))
 	}
-	r = f.postForm("/sessions/two_factor_authentication/new?type=carrier_pigeon", "x")
+	r = f.postForm("/login/two_factor_authentication/new?type=carrier_pigeon", "x")
 	wantStatus(t, r, 404)
 }
 
@@ -302,39 +321,34 @@ func TestLastUsedMethodIsRemembered(t *testing.T) {
 
 	// Initially the authenticator app.
 	f := &mfaFlow{t: t, s: s, c: newClient()}
-	if m := lastRedirectMethod(t, f.login()); m != "authenticator_app" {
+	if m := redirectMethod(t, f.login()); m != "authenticator_app" {
 		t.Fatalf("first login redirects to %q", m)
 	}
 
 	// Log in via SMS (picker), verify.
-	_, forms := pageTokens(t, f.get(s.URL()+pathVerify).Body)
-	r := f.postForm(pathSMS, forms[pathSMS])
-	meta, vf := pageTokens(t, r.Body)
-	wantTurbo(t, f.verify("sms", s.LastMFACode("sms"), meta, vf[pathVerify]))
+	r := f.get(pickerLinks(t, f.get(pathVerify).Body)["sms"])
+	wantSuccess(t, f.verify("sms", s.LastMFACode("sms"), csrfToken(t, r.Body)))
 
 	// The next login, in a new session, goes straight to sms.
 	f2 := &mfaFlow{t: t, s: s, c: newClient()}
-	if m := lastRedirectMethod(t, f2.login()); m != "sms" {
+	if m := redirectMethod(t, f2.login()); m != "sms" {
 		t.Fatalf("second login redirects to %q, want sms", m)
 	}
 	// An abandoned challenge does not change the memory, a TOTP login does.
 	f3 := &mfaFlow{t: t, s: s, c: newClient()}
-	loc := f3.login()
-	if m := lastRedirectMethod(t, loc); m != "sms" {
+	if m := redirectMethod(t, f3.login()); m != "sms" {
 		t.Fatalf("redirect = %q", m)
 	}
-	_, forms = pageTokens(t, f3.get(s.URL()+pathVerify).Body)
-	r = f3.postForm(pathApp, forms[pathApp])
-	meta, vf = pageTokens(t, r.Body)
-	wantTurbo(t, f3.verify("authenticator_app", s.CurrentTOTP(), meta, vf[pathVerify]))
-	if m := lastRedirectMethod(t, (&mfaFlow{t: t, s: s, c: newClient()}).login()); m != "authenticator_app" {
+	r = f3.get(pickerLinks(t, f3.get(pathVerify).Body)["authenticator_app"])
+	wantSuccess(t, f3.verify("authenticator_app", s.CurrentTOTP(), csrfToken(t, r.Body)))
+	if m := redirectMethod(t, (&mfaFlow{t: t, s: s, c: newClient()}).login()); m != "authenticator_app" {
 		t.Fatalf("redirect after TOTP login = %q", m)
 	}
 }
 
 func TestWithLastMFAMethod(t *testing.T) {
 	f := newMFAFlow(t, WithLastMFAMethod("email"))
-	if m := lastRedirectMethod(t, f.login()); m != "email" {
+	if m := redirectMethod(t, f.login()); m != "email" {
 		t.Fatalf("redirect = %q", m)
 	}
 	defer func() {
@@ -345,72 +359,38 @@ func TestWithLastMFAMethod(t *testing.T) {
 	WithLastMFAMethod("fax")
 }
 
-func TestWrongFormTokensAreRejected(t *testing.T) {
-	f := newMFAFlow(t)
-	f.login()
-	pickerMeta, picker := pageTokens(t, f.get(f.s.URL()+pathVerify).Body)
+func TestWrongTokensAreRejected(t *testing.T) {
+	f := newMFAFlow(t, WithLastMFAMethod("sms"))
+	r := f.get(f.login())
+	tok := csrfToken(t, r.Body)
+	code := f.s.LastMFACode("sms")
 
-	// Picker: another form's token, the meta token, junk, none.
-	for name, tok := range map[string]string{
-		"token of another picker form": picker[pathSMS],
-		"meta token":                   pickerMeta,
-		"junk":                         "nope",
-		"empty":                        "",
-	} {
-		if r := f.postForm(pathEmail, tok); r.StatusCode != http.StatusUnprocessableEntity {
-			t.Errorf("picker with %s: status = %d, want 422", name, r.StatusCode)
+	for name, bad := range map[string]string{"junk": "nope", "empty": "", "stale": strings.Repeat("0", 64)} {
+		if r := f.verify("sms", code, bad); r.StatusCode != http.StatusForbidden {
+			t.Errorf("verify with %s token: status = %d, want 403", name, r.StatusCode)
+		}
+		if r := f.postForm(pathSMS, bad, "context", "resend"); r.StatusCode != http.StatusForbidden {
+			t.Errorf("resend with %s token: status = %d, want 403", name, r.StatusCode)
 		}
 	}
-	if len(f.s.MFADeliveries()) != 0 {
-		t.Fatal("rejected posts must not send codes")
-	}
-	// The picker needs no X-CSRF-Token (postForm sends none).
-	r := f.postForm(pathSMS, picker[pathSMS])
-	wantStatus(t, r, 200)
-	meta, forms := pageTokens(t, r.Body)
-
-	// Picker and resend tokens are not accepted for the verify form, and vice versa.
-	code := f.s.LastMFACode("sms")
-	if r := f.verify("sms", code, meta, forms[pathSMS]); r.StatusCode != http.StatusUnprocessableEntity || strings.Contains(string(r.Body), "Invalid code") {
-		t.Errorf("verify with the resend token: status = %d, body:\n%s", r.StatusCode, r.Body)
-	}
-	if r := f.verify("sms", code, meta, picker[pathSMS]); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("verify with a picker token: status = %d", r.StatusCode)
-	}
-	if r := f.verify("sms", code, meta, ""); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("verify without a form token: status = %d", r.StatusCode)
-	}
-	if r := f.postForm(pathSMS, forms[pathVerify], "context", "resend"); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("resend with the verify token: status = %d", r.StatusCode)
-	}
-	if r := f.postForm(pathEmail, forms[pathSMS], "context", "resend"); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("resend for email with the sms token: status = %d", r.StatusCode)
-	}
-	if r := f.postForm(pathSMS, "stale-token", "context", "resend"); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("resend with a stale token: status = %d", r.StatusCode)
-	}
 	if got := len(f.s.MFADeliveries()); got != 1 {
-		t.Errorf("deliveries = %d, want 1", got)
+		t.Errorf("deliveries = %d, want 1: rejected posts must not send codes", got)
 	}
+	// The token alone is not enough: the _csrf_token cookie must match too.
+	cookies := map[string]string{}
+	for _, ck := range f.c.Jar.Cookies(mustURL(t, f.s.URL())) {
+		cookies[ck.Name] = ck.Value
+	}
+	h := formHdr()
+	h["Cookie"] = sessionCookie + "=" + cookies[sessionCookie]
+	r = do(t, &http.Client{CheckRedirect: f.c.CheckRedirect}, "POST", f.s.URL()+pathVerify,
+		formBody("_csrf_token", tok, "type", "sms", "code", code), h)
+	wantStatus(t, r, 403)
+	// The right token verifies, and no X-CSRF-Token header is involved.
+	wantSuccess(t, f.verify("sms", code, tok))
 
-	// Verify requires the meta token in the header, and rejects a form token there.
-	post := func(hdr map[string]string) reply {
-		return do(t, f.c, "POST", f.s.URL()+pathVerify,
-			formBody("authenticity_token", forms[pathVerify], "type", "sms", "code", code, "commit", "Use code"), hdr)
-	}
-	noHdr := formHdr("")
-	delete(noHdr, "X-CSRF-Token")
-	if r := post(noHdr); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("verify without X-CSRF-Token: status = %d", r.StatusCode)
-	}
-	if r := post(formHdr(forms[pathVerify])); r.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("verify with a form token in X-CSRF-Token: status = %d", r.StatusCode)
-	}
-	// An old (still issued) meta token is fine, like in Rails.
-	wantTurbo(t, post(formHdr(meta)))
-
-	// The 422 for a bad token has the login page's shape.
-	if r := f.postForm(pathEmail, "junk"); !strings.Contains(string(r.Body), "Invalid authenticity token") {
+	// The failure page.
+	if r := f.postForm(pathEmail, "junk"); !strings.Contains(string(r.Body), "Invalid CSRF token") {
 		t.Errorf("CSRF failure body: %s", r.Body)
 	}
 }
@@ -418,14 +398,14 @@ func TestWrongFormTokensAreRejected(t *testing.T) {
 func TestPostsWithoutLoginAreRejected(t *testing.T) {
 	s := newTestServer(t)
 	f := &mfaFlow{t: t, s: s, c: newClient()}
-	r := f.postForm(pathSMS, "x")
-	wantStatus(t, r, 422)
+	r := f.postForm(pathSMS, "x", "context", "resend")
+	wantStatus(t, r, 403)
 	if len(s.MFADeliveries()) != 0 {
 		t.Error("nothing should be sent")
 	}
-	r = f.get(s.URL() + pathVerify)
+	r = f.get(pathVerify)
 	wantStatus(t, r, 302)
-	r = f.get(s.URL() + pathSMS)
+	r = f.get(pathSMS)
 	wantStatus(t, r, 302)
 }
 
@@ -433,23 +413,20 @@ func TestMFACodeExpiry(t *testing.T) {
 	now := fixedNow
 	f := newMFAFlow(t, WithLastMFAMethod("sms"), WithClock(func() time.Time { return now }))
 	r := f.get(f.login())
-	meta, forms := pageTokens(t, r.Body)
+	tok := csrfToken(t, r.Body)
 	old := f.s.LastMFACode("sms")
 
 	now = now.Add(10*time.Minute - time.Second)
-	r2 := f.verify("sms", old, meta, forms[pathVerify])
-	wantTurbo(t, r2) // still valid at 9:59
+	wantSuccess(t, f.verify("sms", old, tok)) // still valid at 9:59
 
 	// Expired after 10 minutes; a code sent later is valid.
 	f2 := newMFAFlow(t, WithLastMFAMethod("sms"), WithClock(func() time.Time { return now }))
 	r = f2.get(f2.login())
-	meta, forms = pageTokens(t, r.Body)
+	tok = csrfToken(t, r.Body)
 	first := f2.s.LastMFACode("sms")
 	now = now.Add(10 * time.Minute)
-	wantFailedPage(t, f2.verify("sms", first, meta, forms[pathVerify]), "sms")
-	_, forms = pageTokens(t, f2.get(f2.s.URL()+pathVerify).Body)
-	r = f2.postForm(pathSMS, forms[pathSMS])
-	meta, forms = pageTokens(t, r.Body)
+	wantWrongCode(t, f2.verify("sms", first, tok), "sms")
+	r = f2.get(pickerLinks(t, f2.get(pathVerify).Body)["sms"])
 	second := f2.s.LastMFACode("sms")
 	if second == first {
 		t.Fatal("codes must differ")
@@ -458,11 +435,8 @@ func TestMFACodeExpiry(t *testing.T) {
 	if !dl[1].At.Equal(now.Truncate(time.Second)) {
 		t.Errorf("delivery time = %v, want %v", dl[1].At, now)
 	}
-	wantFailedPage(t, f2.verify("sms", first, meta, forms[pathVerify]), "sms")
-	_, forms = pageTokens(t, f2.get(f2.s.URL()+pathVerify).Body)
-	r = f2.postForm(pathSMS, forms[pathSMS])
-	meta, forms = pageTokens(t, r.Body)
-	wantTurbo(t, f2.verify("sms", f2.s.LastMFACode("sms"), meta, forms[pathVerify]))
+	wantWrongCode(t, f2.verify("sms", first, csrfToken(t, r.Body)), "sms")
+	wantSuccess(t, f2.verify("sms", second, csrfToken(t, r.Body)))
 }
 
 func TestMFASendOnGETOption(t *testing.T) {
@@ -492,28 +466,25 @@ func TestMFASendOnGETOption(t *testing.T) {
 	if len(g.s.MFADeliveries()) != 0 || g.s.LastMFACode("sms") != "" {
 		t.Fatalf("deliveries = %+v", g.s.MFADeliveries())
 	}
-	meta, forms := pageTokens(t, r.Body)
+	tok := csrfToken(t, r.Body)
 	// No code was ever sent, so no code verifies.
-	wantFailedPage(t, g.verify("sms", "000000", meta, forms[pathVerify]), "sms")
-	r = g.get(loc)
-	_, forms = pageTokens(t, r.Body)
-	r = g.postForm(pathSMS, forms[pathSMS], "context", "resend")
+	wantWrongCode(t, g.verify("sms", "000000", tok), "sms")
+	g.get(loc)
+	g.resend(pathSMS, tok)
 	if dl := g.s.MFADeliveries(); len(dl) != 1 || dl[0].Trigger != "resend" {
 		t.Fatalf("deliveries = %+v", dl)
 	}
-	meta, forms = pageTokens(t, r.Body)
-	wantTurbo(t, g.verify("sms", g.s.LastMFACode("sms"), meta, forms[pathVerify]))
+	wantSuccess(t, g.verify("sms", g.s.LastMFACode("sms"), tok))
 }
 
 func TestMFACodesAreSixDigits(t *testing.T) {
 	f := newMFAFlow(t, WithLastMFAMethod("sms"))
 	r := f.get(f.login())
-	_, forms := pageTokens(t, r.Body)
+	tok := csrfToken(t, r.Body)
 	seen := map[string]bool{}
 	re := regexp.MustCompile(`^\d{6}$`)
 	for range 40 {
-		r = f.postForm(pathSMS, forms[pathSMS], "context", "resend")
-		_, forms = pageTokens(t, r.Body)
+		f.resend(pathSMS, tok)
 	}
 	for _, d := range f.s.MFADeliveries() {
 		if !re.MatchString(d.Code) || seen[d.Code] {
@@ -526,11 +497,11 @@ func TestMFACodesAreSixDigits(t *testing.T) {
 func TestMFARedactsCodesInRequestLog(t *testing.T) {
 	f := newMFAFlow(t, WithLastMFAMethod("sms"))
 	r := f.get(f.login())
-	meta, forms := pageTokens(t, r.Body)
+	tok := csrfToken(t, r.Body)
 	code := f.s.LastMFACode("sms")
-	wantTurbo(t, f.verify("sms", code, meta, forms[pathVerify]))
+	wantSuccess(t, f.verify("sms", code, tok))
 	for _, rq := range f.s.Requests() {
-		if strings.Contains(rq.Body, code) || strings.Contains(rq.Body, forms[pathVerify]) {
+		if strings.Contains(rq.Body, code) || strings.Contains(rq.Body, tok) {
 			t.Fatalf("request log leaks a secret: %+v", rq)
 		}
 	}

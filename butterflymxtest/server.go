@@ -68,6 +68,7 @@ type config struct {
 	mfa      bool
 	lastMFA  string
 	mfaGET   bool
+	mfaLand  bool // login lands on the method picker
 	tokenTTL time.Duration
 	apiTTL   time.Duration
 	pageSize int
@@ -83,8 +84,8 @@ type Option func(*config)
 func WithClock(f func() time.Time) Option { return func(c *config) { c.clock = f } }
 
 // WithoutMFA makes accounts with the seeded credentials log in without a
-// second factor: POST /login answers with a turbo-stream redirect straight
-// back to the authorize endpoint.
+// second factor: POST /login redirects straight back to the authorize
+// endpoint.
 func WithoutMFA() Option { return func(c *config) { c.mfa = false } }
 
 // WithTokenTTL sets the lifetime of OAuth access tokens (default 24 h, the
@@ -382,7 +383,7 @@ func recordHeaders(r *http.Request) http.Header {
 
 var (
 	secretFormKeys = map[string]bool{
-		"login[password]": true, "code": true, "authenticity_token": true, "code_verifier": true,
+		"login[password]": true, "password": true, "code": true, "authenticity_token": true, "_csrf_token": true, "code_verifier": true,
 		"refresh_token": true, "device[token]": true, "device[voip_token]": true,
 	}
 	secretJSONKeys = map[string]bool{
@@ -443,10 +444,10 @@ func (s *Server) routes() *http.ServeMux {
 	m.HandleFunc("GET /oauth/authorize", s.hAuthorize)
 	m.HandleFunc("GET /login/new", s.hLoginNew)
 	m.HandleFunc("POST /login", s.hLogin)
-	m.HandleFunc("GET /sessions/two_factor_authentication/new", s.hTwoFactorNew)
-	m.HandleFunc("POST /sessions/two_factor_authentication/new", s.hTwoFactorChoose)
-	m.HandleFunc("GET /sessions/two_factor_authentication", s.hTwoFactorPicker)
-	m.HandleFunc("POST /sessions/two_factor_authentication", s.hTwoFactor)
+	m.HandleFunc("GET "+mfaNewPath, s.hTwoFactorNew)
+	m.HandleFunc("POST "+mfaNewPath, s.hTwoFactorResend)
+	m.HandleFunc("GET "+mfaVerifyPath, s.hTwoFactorPicker)
+	m.HandleFunc("POST "+mfaVerifyPath, s.hTwoFactor)
 	m.HandleFunc("POST /oauth/token", s.hToken)
 	m.HandleFunc("GET /api/mobile/regions", s.hRegions)
 	// denizen

@@ -53,7 +53,7 @@ func TestFullLoginWithTOTP(t *testing.T) {
 	for _, rq := range s.Requests() {
 		if rq.Path == "/login" {
 			sawLogin = true
-			if !strings.Contains(rq.Body, "login%5Bemail%5D=resident%40example.com") || !strings.Contains(rq.Body, "REDACTED") || rq.Status != 303 {
+			if !strings.Contains(rq.Body, "email=resident%40example.com") || !strings.Contains(rq.Body, "REDACTED") || rq.Status != 302 {
 				t.Errorf("login record = %+v", rq)
 			}
 		}
@@ -76,15 +76,22 @@ func TestWrongPassword(t *testing.T) {
 	c := newClient()
 	do(t, c, "GET", authorizeURL(s.URL(), newPKCE(), "st", true), nil, nil)
 	r := do(t, c, "GET", s.URL()+"/login/new", nil, nil)
-	meta, form := csrfTokens(t, r.Body)
-	r = do(t, c, "POST", s.URL()+"/login", formBody("authenticity_token", form, "login[email]", DefaultEmail, "login[password]", "nope", "commit", "Sign in with email"), formHdr(meta))
-	wantStatus(t, r, 422)
+	tok := csrfToken(t, r.Body)
+	// A failed sign-in redirects back to the login page, which shows the error once.
+	r = do(t, c, "POST", s.URL()+"/login", loginBody(tok, DefaultEmail, "nope"), formHdr())
+	wantStatus(t, r, 303)
+	if r.Header.Get("Location") != "/login/new" {
+		t.Fatalf("location = %q", r.Header.Get("Location"))
+	}
+	r = do(t, c, "GET", s.URL()+"/login/new", nil, nil)
+	wantStatus(t, r, 200)
 	body := string(r.Body)
-	if !strings.Contains(body, `action="/login"`) || !strings.Contains(body, "Invalid email or password.") {
+	if !strings.Contains(body, `action="/login"`) || !strings.Contains(body, "Invalid email or password") {
 		t.Fatalf("expected the login form with an error:\n%s", body)
 	}
-	if m2, f2 := csrfTokens(t, r.Body); m2 == meta || f2 == form {
-		t.Error("expected fresh CSRF tokens")
+	r = do(t, c, "GET", s.URL()+"/login/new", nil, nil)
+	if strings.Contains(string(r.Body), "Invalid email or password") {
+		t.Error("the error must be shown only once")
 	}
 }
 
@@ -92,68 +99,73 @@ func TestCSRFIsEnforced(t *testing.T) {
 	s := newTestServer(t)
 	c := newClient()
 	r := do(t, c, "GET", s.URL()+"/login/new", nil, nil)
-	meta, form := csrfTokens(t, r.Body)
-	body := formBody("authenticity_token", form, "login[email]", DefaultEmail, "login[password]", DefaultPassword)
+	tok := csrfToken(t, r.Body)
 
-	for name, tc := range map[string]struct {
-		c   func() reply
-		msg string
-	}{
-		"no header": {func() reply {
-			h := formHdr(meta)
-			delete(h, "X-CSRF-Token")
-			return do(t, c, "POST", s.URL()+"/login", body, h)
-		}, "header missing"},
-		"bad header": {func() reply { return do(t, c, "POST", s.URL()+"/login", body, formHdr("bogus")) }, "header wrong"},
-		"no session": {func() reply { return do(t, newClient(), "POST", s.URL()+"/login", body, formHdr(meta)) }, "no cookie"},
-		"bad form token": {func() reply {
-			return do(t, c, "POST", s.URL()+"/login", formBody("authenticity_token", "x", "login[email]", DefaultEmail, "login[password]", DefaultPassword), formHdr(meta))
-		}, "form token wrong"},
+	for name, tc := range map[string]func() reply{
+		"no token": func() reply {
+			return do(t, c, "POST", s.URL()+"/login", loginBody("", DefaultEmail, DefaultPassword), formHdr())
+		},
+		"bad token": func() reply {
+			return do(t, c, "POST", s.URL()+"/login", loginBody("bogus", DefaultEmail, DefaultPassword), formHdr())
+		},
+		"no session": func() reply {
+			return do(t, newClient(), "POST", s.URL()+"/login", loginBody(tok, DefaultEmail, DefaultPassword), formHdr())
+		},
+		"no cookie": func() reply {
+			// The token alone is not enough: the cookie must match (double submit).
+			h := formHdr()
+			cookie := ""
+			for _, ck := range c.Jar.Cookies(mustURL(t, s.URL())) {
+				if ck.Name == sessionCookie {
+					cookie = ck.Name + "=" + ck.Value
+				}
+			}
+			h["Cookie"] = cookie
+			return do(t, &http.Client{CheckRedirect: c.CheckRedirect}, "POST", s.URL()+"/login", loginBody(tok, DefaultEmail, DefaultPassword), h)
+		},
 	} {
-		if r := tc.c(); r.StatusCode != http.StatusUnprocessableEntity {
-			t.Errorf("%s: status = %d, want 422 (%s)", name, r.StatusCode, tc.msg)
+		if r := tc(); r.StatusCode != http.StatusForbidden {
+			t.Errorf("%s: status = %d, want 403", name, r.StatusCode)
 		}
 	}
 }
 
-func TestWrongTOTPThenRetryWithFreshCSRF(t *testing.T) {
+func mustURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+func TestWrongTOTPRerendersThenRetry(t *testing.T) {
 	s := newTestServer(t)
 	c := newClient()
 	p := newPKCE()
 	do(t, c, "GET", authorizeURL(s.URL(), p, "st", true), nil, nil)
 	r := do(t, c, "GET", s.URL()+"/login/new", nil, nil)
-	meta, form := csrfTokens(t, r.Body)
-	r = do(t, c, "POST", s.URL()+"/login", formBody("authenticity_token", form, "login[email]", DefaultEmail, "login[password]", DefaultPassword), formHdr(meta))
-	wantStatus(t, r, 303)
-	r = do(t, c, "GET", r.Header.Get("Location"), nil, nil)
-	meta, form = csrfTokens(t, r.Body)
+	r = do(t, c, "POST", s.URL()+"/login", loginBody(csrfToken(t, r.Body), DefaultEmail, DefaultPassword), formHdr())
+	wantStatus(t, r, 302)
+	r = do(t, c, "GET", s.URL()+r.Header.Get("Location"), nil, nil)
+	tok := csrfToken(t, r.Body)
 
 	bad := "000000"
 	for bad == s.CurrentTOTP() || totpValid(s.TOTPSecret(), bad, s.now()) {
 		bad = "999999"
 	}
-	r = do(t, c, "POST", s.URL()+"/sessions/two_factor_authentication", formBody("authenticity_token", form, "type", "authenticator_app", "code", bad, "commit", "Use code"), formHdr(meta))
-	wantStatus(t, r, 422)
-	for _, want := range []string{"Two factor authentication failed.", "Invalid code, please try again or request a new code."} {
-		if !strings.Contains(string(r.Body), want) {
-			t.Errorf("422 page lacks %q", want)
-		}
-	}
-	meta2, form2 := csrfTokens(t, r.Body)
-	if meta2 == meta || form2 == form {
-		t.Error("expected a fresh CSRF token on the 422 page")
-	}
-	r = do(t, c, "POST", s.URL()+"/sessions/two_factor_authentication", formBody("authenticity_token", form2, "type", "authenticator_app", "code", s.CurrentTOTP(), "commit", "Use code"), formHdr(meta2))
+	// A wrong code answers 200 with the challenge page again (as captured).
+	r = do(t, c, "POST", s.URL()+"/login/two_factor_authentication", formBody("_csrf_token", tok, "type", "authenticator_app", "code", bad), formHdr())
 	wantStatus(t, r, 200)
-	if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/vnd.turbo-stream.html") {
-		t.Errorf("content type = %q", got)
+	if !strings.Contains(string(r.Body), "Invalid verification code") || !strings.Contains(string(r.Body), `action="/login/two_factor_authentication"`) {
+		t.Errorf("re-rendered page lacks the error or the form:\n%s", r.Body)
 	}
-	loc := reTurbo.FindStringSubmatch(string(r.Body))[1]
-	if !strings.Contains(loc, "&amp;") || !strings.HasPrefix(loc, "/oauth/authorize?") || strings.Contains(loc, "prompt") {
-		t.Errorf("turbo location = %q", loc)
-	}
-	if !strings.Contains(string(r.Body), `action="redirect_to"`) {
-		t.Errorf("turbo body = %s", r.Body)
+	tok = csrfToken(t, r.Body)
+	r = do(t, c, "POST", s.URL()+"/login/two_factor_authentication", formBody("_csrf_token", tok, "type", "authenticator_app", "code", s.CurrentTOTP()), formHdr())
+	wantStatus(t, r, 302)
+	loc := r.Header.Get("Location")
+	if !strings.HasPrefix(loc, "/oauth/authorize?") || strings.Contains(loc, "prompt") {
+		t.Errorf("location = %q", loc)
 	}
 }
 
@@ -177,9 +189,10 @@ func TestAuthorizeWhenAlreadyAuthenticated(t *testing.T) {
 	loginClient(t, s, c)
 	p := newPKCE()
 	r := do(t, c, "GET", authorizeURL(s.URL(), p, "again", false), nil, nil)
-	wantStatus(t, r, 302)
-	if loc := r.Header.Get("Location"); !strings.HasPrefix(loc, "com.butterflymx.oauth://oauth?code=") || !strings.HasSuffix(loc, "&state=again") {
-		t.Errorf("location = %q", loc)
+	// Already signed in: the "Returning to app" page links to the app.
+	cb := appCallback(t, r)
+	if cb.Query().Get("code") == "" || cb.Query().Get("state") != "again" {
+		t.Errorf("callback = %q", cb)
 	}
 	// prompt=login forces a new login.
 	r = do(t, c, "GET", authorizeURL(s.URL(), p, "again", true), nil, nil)
@@ -213,12 +226,8 @@ func TestCodeExchangeChecks(t *testing.T) {
 		c := newClient()
 		do(t, c, "GET", authorizeURL(s.URL(), p, "s", true), nil, nil)
 		r := do(t, c, "GET", s.URL()+"/login/new", nil, nil)
-		meta, form := csrfTokens(t, r.Body)
-		r = do(t, c, "POST", s.URL()+"/login", formBody("authenticity_token", form, "login[email]", DefaultEmail, "login[password]", DefaultPassword), formHdr(meta))
-		loc := reTurbo.FindStringSubmatch(string(r.Body))[1]
-		r = do(t, c, "GET", s.URL()+strings.ReplaceAll(loc, "&amp;", "&"), nil, nil)
-		u, _ := url.Parse(r.Header.Get("Location"))
-		return u.Query().Get("code")
+		r = do(t, c, "POST", s.URL()+"/login", loginBody(csrfToken(t, r.Body), DefaultEmail, DefaultPassword), formHdr())
+		return appCallback(t, do(t, c, "GET", s.URL()+r.Header.Get("Location"), nil, nil)).Query().Get("code")
 	}
 	p := newPKCE()
 	exchange := func(code, verifier, redirect string) reply {

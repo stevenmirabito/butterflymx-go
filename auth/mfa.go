@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const challengeV = 2
+const challengeV = 3
 
 // MFAMethod is a two-factor method.
 type MFAMethod string
@@ -65,17 +65,26 @@ type MFAChallenge struct {
 	// (the page shows no address) and authenticator_app.
 	Destination string
 	CreatedAt   time.Time
+	// Offered lists the methods the account's method picker offered, in the
+	// order authenticator_app, sms, email (the others are not supported by this
+	// library and left out). It is nil until the picker has been seen: when the
+	// server picks a default method the challenge page does not say what else
+	// the account has, so callers must treat nil as "unknown". Once the picker
+	// has been seen it is never nil: an empty, non-nil slice means the account
+	// offers no supported method. It is set when the login lands on the picker
+	// and by [SwitchMFAMethod], also when that fails because the account lacks
+	// the method.
+	Offered []MFAMethod
 
-	cfg      Config
-	cookies  []wireCookie
-	csrfMeta string // <meta name="csrf-token">, sent as X-CSRF-Token on the verify POST only
-	csrfForm string // the verify form's hidden authenticity_token, sent in the body
-	action   string // verify form action path
-	mfaType  string // verify form hidden "type" field
+	cfg     Config
+	cookies []wireCookie
+	csrf    string // the verify form's hidden _csrf_token
+	action  string // verify form action path
+	mfaType string // verify form hidden "type" field
 
-	// Resend form (sms and email); CSRF tokens are per form.
-	resendAction string            // action including its query, e.g. /sessions/two_factor_authentication/new?type=sms
-	resendToken  string            // the resend form's own authenticity_token
+	// Resend form (sms and email); each form carries its own CSRF token.
+	resendAction string            // action including its query, e.g. /login/two_factor_authentication/new?type=sms
+	resendToken  string            // the resend form's own _csrf_token
 	resendFields map[string]string // its other hidden fields (context=resend)
 
 	verifier string
@@ -118,8 +127,7 @@ type challengeWire struct {
 	Version      int               `json:"version"`
 	Config       Config            `json:"config"`
 	Cookies      []wireCookie      `json:"cookies"`
-	CSRFMeta     string            `json:"csrf_meta"`
-	CSRFForm     string            `json:"csrf_form"`
+	CSRF         string            `json:"csrf"`
 	Action       string            `json:"action"`
 	MFAType      string            `json:"mfa_type"`
 	ResendAction string            `json:"resend_action,omitzero"`
@@ -129,33 +137,35 @@ type challengeWire struct {
 	State        string            `json:"state"`
 	Method       MFAMethod         `json:"method"`
 	Destination  string            `json:"destination,omitzero"`
+	Offered      []MFAMethod       `json:"offered,omitzero"`
 	CreatedAt    time.Time         `json:"created_at"`
 }
 
-// MarshalBinary encodes the challenge as versioned JSON (version 2).
+// MarshalBinary encodes the challenge as versioned JSON (version 3).
 func (c *MFAChallenge) MarshalBinary() ([]byte, error) {
 	return json.Marshal(challengeWire{
 		Version: challengeV, Config: c.cfg, Cookies: c.cookies,
-		CSRFMeta: c.csrfMeta, CSRFForm: c.csrfForm, Action: c.action, MFAType: c.mfaType,
+		CSRF: c.csrf, Action: c.action, MFAType: c.mfaType,
 		ResendAction: c.resendAction, ResendToken: c.resendToken, ResendFields: c.resendFields,
-		Verifier: c.verifier, State: c.state, Method: c.Method, Destination: c.Destination, CreatedAt: c.CreatedAt,
+		Verifier: c.verifier, State: c.state, Method: c.Method, Destination: c.Destination, Offered: c.Offered, CreatedAt: c.CreatedAt,
 	})
 }
 
-// UnmarshalBinary decodes a challenge produced by MarshalBinary. Version 1
-// blobs (written before sms and email were supported) are accepted; they have
-// no resend form and no destination.
+// UnmarshalBinary decodes a challenge produced by MarshalBinary. Challenges
+// of earlier versions (1 and 2) belong to the accounts login that ButterflyMX
+// replaced in November 2026; their sessions are dead, so they are rejected.
 func (c *MFAChallenge) UnmarshalBinary(data []byte) error {
 	var w challengeWire
 	if err := json.Unmarshal(data, &w); err != nil {
-		return fmt.Errorf("auth: decode MFA challenge: %w", err)
+		// The decoder's own text can quote the input; the cause stays reachable.
+		return newRedacted("auth: decode MFA challenge: invalid state", err)
 	}
-	if w.Version != challengeV && w.Version != 1 {
+	if w.Version != challengeV {
 		return fmt.Errorf("auth: unsupported MFA challenge version %d", w.Version)
 	}
 	*c = MFAChallenge{
-		Method: w.Method, Destination: w.Destination, CreatedAt: w.CreatedAt, cfg: w.Config, cookies: w.Cookies,
-		csrfMeta: w.CSRFMeta, csrfForm: w.CSRFForm, action: w.Action, mfaType: w.MFAType,
+		Method: w.Method, Destination: w.Destination, Offered: w.Offered, CreatedAt: w.CreatedAt, cfg: w.Config, cookies: w.Cookies,
+		csrf: w.CSRF, action: w.Action, mfaType: w.MFAType,
 		resendAction: w.ResendAction, resendToken: w.ResendToken, resendFields: w.ResendFields,
 		verifier: w.Verifier, state: w.State,
 	}
@@ -187,10 +197,10 @@ func (c *MFAChallenge) client(cfg Config) (*loginClient, error) {
 var maskedDest = regexp.MustCompile(`\*{2,}\d{2,4}`)
 
 type challengePage struct {
-	csrfMeta, csrfForm, action, mfaType string
-	resendAction, resendToken           string
-	resendFields                        map[string]string
-	destination                         string
+	csrf, action, mfaType     string
+	resendAction, resendToken string
+	resendFields              map[string]string
+	destination               string
 }
 
 const mfaNewPath = mfaPath + "/new"
@@ -206,33 +216,28 @@ func (f *formInfo) path() string {
 func (p *pageInfo) resendForm() *formInfo {
 	for i := range p.forms {
 		f := &p.forms[i]
-		if f.path() == mfaNewPath && f.inputs["context"] == "resend" && f.inputs["authenticity_token"] != "" {
+		if f.path() == mfaNewPath && f.inputs["context"] == "resend" && f.token() != "" {
 			return f
 		}
 	}
 	return nil
 }
 
-// pickerForms returns the method picker's one-button forms by method, and the
-// number of picker-shaped forms seen (including unknown methods).
-func (p *pageInfo) pickerForms() (map[MFAMethod]*formInfo, int) {
-	out := map[MFAMethod]*formInfo{}
+// pickerLinks returns the method picker's links by method (the href of each
+// .../new?type=<method> anchor), and the number of picker-shaped links seen,
+// including unknown methods.
+func (p *pageInfo) pickerLinks() (map[MFAMethod]string, int) {
+	out := map[MFAMethod]string{}
 	n := 0
-	for i := range p.forms {
-		f := &p.forms[i]
-		if f.path() != mfaNewPath {
-			continue
-		}
-		if _, isResend := f.inputs["context"]; isResend {
-			continue
-		}
-		u, err := url.Parse(f.action)
-		if err != nil || u.Query().Get("type") == "" {
+	for _, href := range p.links {
+		u, err := url.Parse(href)
+		if err != nil || u.Path != mfaNewPath || u.Query().Get("type") == "" {
 			continue
 		}
 		n++
-		if f.inputs["authenticity_token"] != "" {
-			out[MFAMethod(u.Query().Get("type"))] = f
+		m := MFAMethod(u.Query().Get("type"))
+		if _, dup := out[m]; !dup {
+			out[m] = href
 		}
 	}
 	return out, n
@@ -244,24 +249,23 @@ func parseChallenge(l *loginClient, page *response, method MFAMethod) (*challeng
 		return nil, l.flowChanged("two-factor page unparsable", page)
 	}
 	form := info.form(mfaPath)
-	if form == nil || info.csrfMeta == "" || form.inputs["authenticity_token"] == "" {
+	if form == nil || form.token() == "" {
 		return nil, l.flowChanged("two-factor form not found", page)
 	}
 	cp := &challengePage{
-		csrfMeta: info.csrfMeta,
-		csrfForm: form.inputs["authenticity_token"],
-		action:   mfaPath,
-		mfaType:  form.inputs["type"],
+		csrf:    form.token(),
+		action:  mfaPath,
+		mfaType: form.inputs["type"],
 	}
 	if cp.mfaType == "" {
 		cp.mfaType = string(method)
 	}
 	if rf := info.resendForm(); rf != nil {
 		cp.resendAction = rf.action
-		cp.resendToken = rf.inputs["authenticity_token"]
+		cp.resendToken = rf.token()
 		cp.resendFields = map[string]string{}
 		for k, v := range rf.inputs {
-			if k != "authenticity_token" {
+			if k != csrfField {
 				cp.resendFields[k] = v
 			}
 		}
@@ -276,7 +280,7 @@ func parseChallenge(l *loginClient, page *response, method MFAMethod) (*challeng
 func (c *MFAChallenge) apply(cp *challengePage, method MFAMethod, l *loginClient) {
 	c.Method = method
 	c.Destination = cp.destination
-	c.csrfMeta, c.csrfForm, c.action, c.mfaType = cp.csrfMeta, cp.csrfForm, cp.action, cp.mfaType
+	c.csrf, c.action, c.mfaType = cp.csrf, cp.action, cp.mfaType
 	c.resendAction, c.resendToken, c.resendFields = cp.resendAction, cp.resendToken, cp.resendFields
 	c.cookies = l.exportCookies()
 }
@@ -301,7 +305,7 @@ var errPickerUnavailable = errors.New("auth: method picker unavailable")
 func (l *loginClient) startMFA(ctx context.Context, u *url.URL, verifier, state string, want MFAMethod) (*LoginResult, error) {
 	def := MFAMethod(u.Query().Get("type"))
 	if !def.valid() {
-		return nil, fmt.Errorf("%w: %q", ErrMFAMethodUnsupported, truncate(string(def), 40))
+		return nil, fmt.Errorf("%w: the server's default method is %s", ErrMFAMethodUnsupported, l.name(string(def)))
 	}
 	c := &MFAChallenge{Method: def, CreatedAt: l.cfg.clock()(), cfg: l.cfg, verifier: verifier, state: state}
 	switching := want != "" && want != def
@@ -336,18 +340,24 @@ func (l *loginClient) startMFA(ctx context.Context, u *url.URL, verifier, state 
 	return &LoginResult{Challenge: c}, nil
 }
 
-// pick fetches the method picker and posts the form of method. With lenient
-// set, a picker request that does not return a recognizable 200 picker page
-// yields errPickerUnavailable instead of an error. On error c is unchanged.
+// pick fetches the method picker and follows the link of method. With
+// lenient set, a picker request that does not return a recognizable 200 picker
+// page yields errPickerUnavailable instead of an error. On error c is
+// unchanged, except that a recognized picker updates Offered.
 func (c *MFAChallenge) pick(ctx context.Context, l *loginClient, method MFAMethod, lenient bool) error {
 	pu, err := l.base.Parse(mfaPath)
 	if err != nil {
 		return ErrLoginFlowChanged
 	}
-	r, err := l.send(ctx, http.MethodGet, pu, nil, "")
+	r, err := l.send(ctx, http.MethodGet, pu, nil)
 	if err != nil {
 		return err
 	}
+	return c.pickFrom(ctx, l, r, method, lenient)
+}
+
+// pickFrom follows the link of method on the picker page r.
+func (c *MFAChallenge) pickFrom(ctx context.Context, l *loginClient, r *response, method MFAMethod, lenient bool) error {
 	unavailable := func(what string) error {
 		if lenient {
 			return errPickerUnavailable
@@ -361,24 +371,25 @@ func (c *MFAChallenge) pick(ctx context.Context, l *loginClient, method MFAMetho
 	if err != nil {
 		return unavailable("method picker unparsable")
 	}
-	forms, n := info.pickerForms()
+	links, n := info.pickerLinks()
 	if n == 0 {
 		return unavailable("method picker not recognized")
 	}
-	f := forms[method]
-	if f == nil {
-		return l.flowChanged("method picker has no form for "+truncate(string(method), 40), r)
+	c.Offered = offeredMethods(links)
+	href := links[method]
+	if href == "" {
+		// A recognized picker without the method: the account does not have it
+		// (an account without an authenticator app, say). That is an answer,
+		// not a changed flow.
+		return fmt.Errorf("%w: the account does not offer %q", ErrMFAMethodUnsupported, truncate(string(method), 40))
 	}
-	target, err := r.url.Parse(f.action)
+	target, err := r.url.Parse(href)
 	if err != nil {
-		return l.flowChanged("bad method picker form action", r)
+		return l.flowChanged("bad method picker link", r)
 	}
-	// Plain form post with the chosen form's own token and any other hidden inputs.
-	form := url.Values{}
-	for k, v := range f.inputs {
-		form.Set(k, v)
-	}
-	resp, err := l.sendPlainForm(ctx, target, form)
+	// Following the link is the choice; for sms and email it is assumed to
+	// send the code (the old server did; not verified on the new one).
+	resp, err := l.send(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return err
 	}
@@ -386,6 +397,65 @@ func (c *MFAChallenge) pick(ctx context.Context, l *loginClient, method MFAMetho
 		return l.flowChanged("unrecognized response to method choice", resp)
 	}
 	return c.absorb(l, resp, method)
+}
+
+// offeredMethods lists the supported methods of a picker in the order
+// authenticator_app, sms, email.
+func offeredMethods(links map[MFAMethod]string) []MFAMethod {
+	// Never nil: nil means "the picker has not been seen".
+	out := []MFAMethod{}
+	for _, m := range []MFAMethod{MFAAuthenticatorApp, MFASMS, MFAEmail} {
+		if links[m] != "" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// pickerPreference orders the methods to take when the server offers a choice
+// and the caller expressed none: the authenticator app first, because choosing
+// it sends nothing, then email, then sms.
+var pickerPreference = []MFAMethod{MFAAuthenticatorApp, MFAEmail, MFASMS}
+
+// startMFAPicker starts the challenge when the server lands on the method
+// picker instead of a default method's challenge page. It takes want, or else
+// the first offered method of [pickerPreference].
+func (l *loginClient) startMFAPicker(ctx context.Context, u *url.URL, verifier, state string, want MFAMethod) (*LoginResult, error) {
+	page, app, err := l.follow(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+	if app != "" {
+		return l.finish(ctx, app, verifier, state)
+	}
+	if page.status != http.StatusOK {
+		return nil, l.flowChanged("method picker", page)
+	}
+	info, err := parsePage(page.body)
+	if err != nil {
+		return nil, l.flowChanged("method picker unparsable", page)
+	}
+	links, n := info.pickerLinks()
+	if n == 0 {
+		return nil, l.flowChanged("method picker not recognized", page)
+	}
+	method := want
+	if method == "" {
+		for _, m := range pickerPreference {
+			if links[m] != "" {
+				method = m
+				break
+			}
+		}
+		if method == "" {
+			return nil, fmt.Errorf("%w: the server offers no supported method", ErrMFAMethodUnsupported)
+		}
+	}
+	c := &MFAChallenge{Method: method, CreatedAt: l.cfg.clock()(), cfg: l.cfg, verifier: verifier, state: state}
+	if err := c.pickFrom(ctx, l, page, method, false); err != nil {
+		return nil, err
+	}
+	return &LoginResult{Challenge: c}, nil
 }
 
 // clock returns the clock for c: cfg.Now, else the clock c was created with,
@@ -411,19 +481,23 @@ func (c *MFAChallenge) usable(cfg Config, method MFAMethod, check bool) error {
 }
 
 // SwitchMFAMethod switches the pending login to another second factor
-// ("Verify another way"). It fetches the method picker, posts the chosen
-// method's own form (with that form's authenticity_token, no X-CSRF-Token
-// header and a browser-style Accept, as the app does) and takes the returned
-// challenge page. For sms and email this makes the server send a code.
+// ("Verify another way"). It fetches the method picker, follows the chosen
+// method's link and takes the challenge page that comes back. For sms and
+// email this is assumed to make the server send a code (as it did on the old
+// server).
 //
 // c is updated in place (Method, Destination, tokens and cookies); marshal it
 // again afterwards. Choosing the current method is allowed and re-sends the
-// code for sms and email. On error c keeps its method, forms and tokens (only
-// its session cookies are refreshed).
+// code for sms and email. On error c keeps its method, destination and forms;
+// what the server answered is still taken over: the session cookies, the CSRF
+// tokens (the server rotates its double-submit cookie, and the form tokens
+// follow it) and, once the picker was read, Offered. Marshal c again after an
+// error too.
 //
 // It returns [ErrMFAExpired] for an old challenge, [ErrMFAMethodUnsupported]
-// for a method other than authenticator_app, sms and email, and
-// [ErrLoginFlowChanged] when the picker has no form for the method.
+// for a method other than authenticator_app, sms and email or one the
+// account does not offer (the picker has no link for it), and
+// [ErrLoginFlowChanged] when the picker is not recognized.
 func SwitchMFAMethod(ctx context.Context, cfg Config, c *MFAChallenge, method MFAMethod) error {
 	if err := c.usable(cfg, method, true); err != nil {
 		return err
@@ -438,21 +512,36 @@ func SwitchMFAMethod(ctx context.Context, cfg Config, c *MFAChallenge, method MF
 }
 
 // keepSession stores the latest session cookies after a request that failed
-// without changing the challenge's tokens, so the challenge stays usable.
-func (c *MFAChallenge) keepSession(l *loginClient) { c.cookies = l.exportCookies() }
+// without taking over a new page, so the challenge stays usable. The server
+// double-submits its CSRF token (the _csrf_token cookie must equal the form
+// field), and a response may have rotated the cookie, so the challenge's form
+// tokens follow it: a stale form token next to a fresh cookie would be rejected.
+func (c *MFAChallenge) keepSession(l *loginClient) {
+	c.cookies = l.exportCookies()
+	for _, ck := range c.cookies {
+		if ck.Name == csrfField && ck.Value != "" {
+			c.csrf = ck.Value
+			if c.resendToken != "" {
+				c.resendToken = ck.Value
+			}
+		}
+	}
+}
 
 // ResendMFACode asks for another code for sms and email challenges: it posts
 // the challenge page's "Resend code" form (context=resend, that form's own
-// authenticity_token, no X-CSRF-Token header) and takes the returned page.
-// Earlier codes keep working, so callers need not discard
-// them. c is updated in place (including fresh tokens); marshal it again
-// afterwards. On error c keeps its forms and tokens (only its session cookies
-// are refreshed).
+// _csrf_token) and takes the challenge page that comes back, following a
+// redirect if the server answers with one. Earlier codes are assumed to keep
+// working, as they did on the old server (not verified on the current one).
+// c is updated in place (including fresh tokens); marshal it again
+// afterwards. On error c keeps its method, destination and forms, and takes
+// over the session cookies and CSRF tokens the server last issued, as
+// [SwitchMFAMethod] does; marshal it again then too.
 //
 // authenticator_app returns [ErrMFAResendUnsupported]. If c has no resend form
-// (it was restored from a version 1 blob, or the page had none), the code is
-// re-sent by choosing the current method again, as [SwitchMFAMethod] does.
-func ResendMFACode(ctx context.Context, cfg Config, c *MFAChallenge) error {
+// (the page had none), the code is re-sent by choosing the current method
+// again, as [SwitchMFAMethod] does.
+func ResendMFACode(ctx context.Context, cfg Config, c *MFAChallenge) (err error) {
 	if err := c.usable(cfg, "", false); err != nil {
 		return err
 	}
@@ -466,6 +555,13 @@ func ResendMFACode(ctx context.Context, cfg Config, c *MFAChallenge) error {
 	if err != nil {
 		return err
 	}
+	// Whatever goes wrong after this point, keep the session cookies the
+	// server has issued so far.
+	defer func() {
+		if err != nil {
+			c.keepSession(l)
+		}
+	}()
 	if c.resendAction == "" || c.resendToken == "" {
 		err = c.pick(ctx, l, c.Method, false)
 		c.keepSession(l)
@@ -480,10 +576,27 @@ func ResendMFACode(ctx context.Context, cfg Config, c *MFAChallenge) error {
 		form.Set(k, v)
 	}
 	form.Set("context", "resend")
-	form.Set("authenticity_token", c.resendToken)
-	resp, err := l.sendPlainForm(ctx, target, form)
+	form.Set(csrfField, c.resendToken)
+	resp, err := l.send(ctx, http.MethodPost, target, form)
 	if err != nil {
 		return err
+	}
+	if isRedirect(resp.status) {
+		next, app, nerr := l.nextLocation(resp)
+		if nerr != nil || app != "" {
+			c.keepSession(l)
+			return l.flowChanged("unrecognized response to resend", resp)
+		}
+		page, app, ferr := l.follow(ctx, next)
+		if ferr != nil {
+			c.keepSession(l)
+			return ferr
+		}
+		if app != "" {
+			c.keepSession(l)
+			return l.flowChanged("unrecognized response to resend", resp)
+		}
+		resp = page
 	}
 	if resp.status != http.StatusOK {
 		c.keepSession(l)

@@ -186,3 +186,18 @@ func (c Config) validate() error {
 	}
 	return nil
 }
+
+// isAppRedirect reports whether loc is the app redirect: the same scheme,
+// authority and path as RedirectURI (any query), not merely a string that
+// starts with it ("com.butterflymx.oauth://oauth.evil" is not).
+func (c Config) isAppRedirect(loc string) bool {
+	want, err := url.Parse(c.RedirectURI)
+	if err != nil {
+		return false
+	}
+	got, err := url.Parse(loc)
+	if err != nil {
+		return false
+	}
+	return got.Scheme == want.Scheme && strings.EqualFold(got.Host, want.Host) && got.Path == want.Path && got.Opaque == want.Opaque
+}

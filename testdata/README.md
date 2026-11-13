@@ -9,7 +9,7 @@ building, door, device or credential has been replaced (see
 
 | Directory | Content |
 |---|---|
-| `accounts/` | OAuth and login flow: authorize redirects, login page, `POST /login`, 2FA page and submissions (wrong code `422`, success turbo-stream), token exchange, region discovery. |
+| `accounts/` | Token exchange and region discovery. The recorded login and 2FA pages were removed when ButterflyMX replaced its accounts app (November 2026); the login flow is described in `API_SPEC.md` §3 and emulated by `butterflymxtest`. |
 | `denizen/` | `POST /denizen/v1/login` (OAuth token to API token) and `DELETE /denizen/v1/logout`. |
 | `graphql/` | One file per GraphQL operation, named after `operationName`. `TenantDoorReleases` and `TenantCalls` have `hasNextPage: true`. |
 | `rest/` | `/v3` access code lists (active in several states, expired, `304`), keychain gets, creates (custom, recurring, delivery pass, extra virtual key), delivery-pass `PATCH`es, deletes, and `/mobile/v4/users/devices`. |
@@ -84,14 +84,10 @@ and OS versions, and generic labels ("Delivery Pass", "Test", ...).
 
 ### PKCE values
 
-The OAuth `code`, `code_verifier`, `code_challenge`, `state` and `nonce` are
-fake but valid-shaped (43-character base64url). The fake `code_verifier` in
-`accounts/post-oauth-token-200.json` and the fake `code_challenge` in
-`accounts/get-oauth-authorize-302-to-login.json`,
-`accounts/get-oauth-authorize-302-to-app.json` and the turbo-stream response
-are a consistent pair: `base64url(sha256(code_verifier)) == code_challenge`
-(S256), so tests can verify PKCE against them. The `state` in the authorize
-requests matches the one in the final `com.butterflymx.oauth://` redirect.
+The OAuth `code` and `code_verifier` in `accounts/post-oauth-token-200.json`
+are fake but valid-shaped (43-character base64url). The conformance test
+signs in with `base64url(sha256(code_verifier))` as the challenge, so the
+recorded exchange can be replayed against the fake.
 
 ## Adding fixtures
 

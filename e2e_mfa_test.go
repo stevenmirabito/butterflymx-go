@@ -12,7 +12,7 @@ import (
 	"github.com/stevenmirabito/butterflymx-go/butterflymxtest"
 )
 
-const mfaChallengePath = "/sessions/two_factor_authentication/new"
+const mfaChallengePath = "/login/two_factor_authentication/new"
 
 // mfaServer starts a fake with a clock shared with the Authenticator.
 func mfaServer(t *testing.T, opts ...butterflymxtest.Option) *fakeWorld {
@@ -173,7 +173,7 @@ func TestE2EMFAEmailShortcut(t *testing.T) {
 			t.Errorf("the default challenge page was fetched: %+v", r)
 		}
 	}
-	if n := countRequests(srv.Server, "GET", "/sessions/two_factor_authentication"); n != 1 {
+	if n := countRequests(srv.Server, "GET", "/login/two_factor_authentication"); n != 1 {
 		t.Errorf("method picker fetched %d times, want 1", n)
 	}
 	got := srv.MFADeliveries()
@@ -366,4 +366,53 @@ func TestE2EGuestPassAfterSMSLogin(t *testing.T) {
 	if n := len(deliveriesOf(srv, "email")); n != 0 {
 		t.Errorf("email 2FA codes = %d, want 0", n)
 	}
+}
+
+// Some accounts land on the method picker after the password step, with no
+// default method (as captured from production in November 2026). Without a
+// method asked for the client takes the authenticator app, which sends
+// nothing; WithMFAMethod chooses another.
+func TestE2EMFAPickerLanding(t *testing.T) {
+	t.Run("default is the authenticator app", func(t *testing.T) {
+		srv := mfaServer(t, butterflymxtest.WithMFAPickerLanding())
+		ch := startMFA(t, srv)
+		wantMethod(t, ch, auth.MFAAuthenticatorApp)
+		if len(srv.MFADeliveries()) != 0 {
+			t.Fatalf("a code was sent: %+v", srv.MFADeliveries())
+		}
+		tok := finishMFA(t, srv, ch, srv.CurrentTOTP())
+		mustTenants(t, useToken(t, srv, tok))
+	})
+	t.Run("chosen method", func(t *testing.T) {
+		srv := mfaServer(t, butterflymxtest.WithMFAPickerLanding())
+		ch := startMFA(t, srv, auth.WithMFAMethod(auth.MFASMS))
+		wantMethod(t, ch, auth.MFASMS)
+		if ch.Destination != "******0100" {
+			t.Errorf("destination = %q", ch.Destination)
+		}
+		got := srv.MFADeliveries()
+		if len(got) != 1 || got[0].Method != "sms" || got[0].Trigger != "picker" {
+			t.Fatalf("deliveries = %+v, want one sms from the picker", got)
+		}
+		finishMFA(t, srv, ch, srv.LastMFACode("sms"))
+	})
+}
+
+func TestE2EWrongPassword(t *testing.T) {
+	srv := newFakeWorld(t)
+	_, err := auth.StartLogin(context.Background(), srv.authConfig(), butterflymxtest.DefaultEmail, "not-the-password")
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("err = %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestE2EWrongCodeThenRetry(t *testing.T) {
+	srv := mfaServer(t)
+	ch := startMFA(t, srv)
+	_, err := auth.CompleteLogin(context.Background(), srv.authConfig(), ch, "000000")
+	if !errors.Is(err, auth.ErrInvalidMFACode) {
+		t.Fatalf("err = %v, want ErrInvalidMFACode", err)
+	}
+	// The failed attempt refreshed ch in place, ready for the retry.
+	finishMFA(t, srv, ch, srv.CurrentTOTP())
 }
