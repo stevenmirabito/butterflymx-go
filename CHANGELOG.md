@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
+Supports the accounts login ButterflyMX deployed in November 2026. The previous
+login no longer exists, so v0.1.0 cannot sign in. The API may change before v1.0.0.
+
 ### Fixed
 
 - Sign-in works again with the accounts app ButterflyMX deployed in November
@@ -74,6 +79,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and double-submit CSRF cookies, picker links, "Returning to app" page).
   Added `WithMFAPickerLanding`. The recorded Rails login pages were removed
   from `testdata/accounts`.
+
+### Known limitations
+
+These parts of the new login were not observed in the production captures
+(2026-11-12) and are handled from the old behavior or in several shapes:
+
+- The response to "Resend code".
+- The response to a wrong code for SMS and email (the authenticator app's is
+  captured: the challenge page again, with "Invalid verification code").
+- A login without two-factor authentication.
+- Whether following a picker link, or loading an SMS or email challenge page,
+  sends the code (assumed, as before), and whether an earlier code stays valid
+  after a resend.
+- `Offered` is nil until the method picker has been seen; when the server picks
+  a default method, the library cannot tell what other methods the account has.
 
 ## [0.1.0] - 2026-11-12
 
